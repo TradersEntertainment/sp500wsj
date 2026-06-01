@@ -193,10 +193,10 @@
                 <div>
                     <h2 class="text-2xl font-bold text-white flex items-center gap-2">
                         <i data-lucide="award" class="text-brand-accent w-6 h-6"></i>
-                        Polymarket Contract Resolution Status
+                        Polymarket Contract Resolution Status (SPY ETF)
                     </h2>
                     <p class="text-slate-400 text-sm mt-1">
-                        Determines the winner based strictly on WSJ Historical Prices open/close values.
+                        Determines the winner based strictly on WSJ SPY ETF open/close values.
                     </p>
                 </div>
                 <div id="resBadge" class="px-6 py-2 rounded-2xl text-sm font-bold uppercase tracking-wider transition-all duration-300">
@@ -206,12 +206,12 @@
 
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-sm">
                 <div class="p-4 bg-brand-card/40 rounded-2xl border border-brand-border/30">
-                    <span class="text-slate-400 block text-xs mb-1">WSJ Cash Index Open</span>
-                    <span id="resSpxOpen" class="text-2xl font-bold font-mono text-white">-</span>
+                    <span class="text-slate-400 block text-xs mb-1">WSJ SPY ETF Price</span>
+                    <span id="resSpyOpen" class="text-2xl font-bold font-mono text-white">-</span>
                 </div>
                 <div class="p-4 bg-brand-card/40 rounded-2xl border border-brand-border/30">
-                    <span class="text-slate-400 block text-xs mb-1">WSJ Prior Close</span>
-                    <span id="resSpxClose" class="text-2xl font-bold font-mono text-white">-</span>
+                    <span class="text-slate-400 block text-xs mb-1">WSJ SPY Prior Close</span>
+                    <span id="resSpyClose" class="text-2xl font-bold font-mono text-white">-</span>
                 </div>
                 <div class="p-4 bg-brand-card/40 rounded-2xl border border-brand-border/30">
                     <span class="text-slate-400 block text-xs mb-1">Current Spread</span>
@@ -265,6 +265,7 @@
         let chart;
         let activeDataset = 'SPX';
         let fullHistoryData = { SPX: [], ES00: [], SPY: [] };
+        let latestQuotes = {};
 
         // Initialize empty chart
         function initChart() {
@@ -280,7 +281,7 @@
                 data: {
                     labels: [],
                     datasets: [{
-                        label: 'S&P 500',
+                        label: 'Live Price',
                         data: [],
                         borderColor: '#3B82F6',
                         borderWidth: 2,
@@ -291,13 +292,29 @@
                         fill: true,
                         backgroundColor: gradient,
                         tension: 0.15
+                    }, {
+                        label: "Yesterday's Close",
+                        data: [],
+                        borderColor: 'rgba(255, 255, 255, 0.35)',
+                        borderWidth: 1.5,
+                        borderDash: [6, 6],
+                        pointRadius: 0,
+                        pointHoverRadius: 0,
+                        fill: false,
+                        tension: 0
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { display: false }
+                        legend: { 
+                            display: true,
+                            labels: {
+                                color: '#94A3B8',
+                                font: { family: 'Outfit', size: 11 }
+                            }
+                        }
                     },
                     scales: {
                         x: {
@@ -339,6 +356,15 @@
             chart.data.labels = labels;
             chart.data.datasets[0].data = prices;
             
+            // Draw yesterday's close reference line
+            const quote = latestQuotes[activeDataset];
+            let priorClose = 0;
+            if (quote) {
+                priorClose = quote.priorClose;
+            }
+            const priorCloseData = new Array(prices.length).fill(priorClose);
+            chart.data.datasets[1].data = priorCloseData;
+            
             // Dynamically change border color based on price change
             if (prices.length > 1) {
                 const startPrice = prices[0];
@@ -368,6 +394,7 @@
                 const response = await fetch('/api/data');
                 const data = await response.json();
                 fullHistoryData = data.history;
+                latestQuotes = data.quotes;
                 updateUI(data.quotes);
                 updateChartData();
             } catch (e) {
@@ -421,18 +448,18 @@
                 document.getElementById('spyTime').innerText = `WSJ: ${spy.wsj_timestamp}`;
             }
 
-            // Resolution logic
+            // Resolution logic (Tracks SPY ETF)
             if (spx && fut && spy) {
-                const openVal = spx.lastPrice; // Note: Cash index lastPrice during market hours is active
-                const priorClose = spx.priorClose;
-                const isMarketOpen = spx.priceChange !== 0;
+                const openVal = spy.lastPrice; 
+                const priorClose = spy.priorClose;
+                const isMarketOpen = spy.priceChange !== 0;
                 
                 let spread = openVal - priorClose;
                 let spreadText = (spread >= 0 ? '+' : '') + spread.toFixed(2);
                 let colorClass = spread >= 0 ? 'text-brand-green' : 'text-brand-red';
                 
-                document.getElementById('resSpxOpen').innerText = openVal.toLocaleString(undefined, {minimumFractionDigits: 2});
-                document.getElementById('resSpxClose').innerText = priorClose.toLocaleString(undefined, {minimumFractionDigits: 2});
+                document.getElementById('resSpyOpen').innerText = openVal.toLocaleString(undefined, {minimumFractionDigits: 2});
+                document.getElementById('resSpyClose').innerText = priorClose.toLocaleString(undefined, {minimumFractionDigits: 2});
                 document.getElementById('resSpread').className = `text-2xl font-bold font-mono ${colorClass}`;
                 document.getElementById('resSpread').innerText = spreadText;
 
@@ -472,6 +499,7 @@
                 const response = await fetch('/api/force_refresh');
                 const data = await response.json();
                 fullHistoryData = data.data.history;
+                latestQuotes = data.data.quotes;
                 updateUI(data.data.quotes);
                 updateChartData();
             } catch (e) {
