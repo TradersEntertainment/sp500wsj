@@ -114,13 +114,17 @@
                     <div id="spxPrice" class="text-4xl font-extrabold font-mono tracking-tight">-</div>
                     <div id="spxChange" class="text-sm font-semibold flex items-center gap-1">-</div>
                 </div>
-                <div class="mt-6 grid grid-cols-2 gap-4 border-t border-brand-border/60 pt-4 text-sm">
+                <div class="mt-6 grid grid-cols-3 gap-2 border-t border-brand-border/60 pt-4 text-[11px] sm:text-xs">
                     <div>
-                        <span class="text-slate-400 block text-xs">Prior Close</span>
+                        <span class="text-slate-400 block text-[10px] whitespace-nowrap">Prior Close</span>
                         <span id="spxPrior" class="font-bold font-mono text-slate-200">-</span>
                     </div>
                     <div>
-                        <span class="text-slate-400 block text-xs">Daily Range</span>
+                        <span class="text-slate-400 block text-[10px] whitespace-nowrap">Today's Open</span>
+                        <span id="spxOpenVal" class="font-bold font-mono text-slate-200">-</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 block text-[10px] whitespace-nowrap">Daily Range</span>
                         <span id="spxRange" class="font-bold font-mono text-slate-200">-</span>
                     </div>
                 </div>
@@ -142,13 +146,17 @@
                     <div id="futPrice" class="text-4xl font-extrabold font-mono tracking-tight">-</div>
                     <div id="futChange" class="text-sm font-semibold flex items-center gap-1">-</div>
                 </div>
-                <div class="mt-6 grid grid-cols-2 gap-4 border-t border-brand-border/60 pt-4 text-sm">
+                <div class="mt-6 grid grid-cols-3 gap-2 border-t border-brand-border/60 pt-4 text-[11px] sm:text-xs">
                     <div>
-                        <span class="text-slate-400 block text-xs">Prior Close</span>
+                        <span class="text-slate-400 block text-[10px] whitespace-nowrap">Prior Close</span>
                         <span id="futPrior" class="font-bold font-mono text-slate-200">-</span>
                     </div>
                     <div>
-                        <span class="text-slate-400 block text-xs">Daily Range</span>
+                        <span class="text-slate-400 block text-[10px] whitespace-nowrap">Today's Open</span>
+                        <span id="futOpenVal" class="font-bold font-mono text-slate-200">-</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 block text-[10px] whitespace-nowrap">Daily Range</span>
                         <span id="futRange" class="font-bold font-mono text-slate-200">-</span>
                     </div>
                 </div>
@@ -170,13 +178,17 @@
                     <div id="spyPrice" class="text-4xl font-extrabold font-mono tracking-tight">-</div>
                     <div id="spyChange" class="text-sm font-semibold flex items-center gap-1">-</div>
                 </div>
-                <div class="mt-6 grid grid-cols-2 gap-4 border-t border-brand-border/60 pt-4 text-sm">
+                <div class="mt-6 grid grid-cols-3 gap-2 border-t border-brand-border/60 pt-4 text-[11px] sm:text-xs">
                     <div>
-                        <span class="text-slate-400 block text-xs">Prior Close</span>
+                        <span class="text-slate-400 block text-[10px] whitespace-nowrap">Prior Close</span>
                         <span id="spyPrior" class="font-bold font-mono text-slate-200">-</span>
                     </div>
                     <div>
-                        <span class="text-slate-400 block text-xs">Daily Range</span>
+                        <span class="text-slate-400 block text-[10px] whitespace-nowrap">Today's Open</span>
+                        <span id="spyOpenVal" class="font-bold font-mono text-slate-200">-</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 block text-[10px] whitespace-nowrap">Daily Range</span>
                         <span id="spyRange" class="font-bold font-mono text-slate-200">-</span>
                     </div>
                 </div>
@@ -302,6 +314,16 @@
                         pointHoverRadius: 0,
                         fill: false,
                         tension: 0
+                    }, {
+                        label: "Today's Open",
+                        data: [],
+                        borderColor: '#10B981',
+                        borderWidth: 1.5,
+                        borderDash: [2, 3], // Dotted line
+                        pointRadius: 0,
+                        pointHoverRadius: 0,
+                        fill: false,
+                        tension: 0
                     }]
                 },
                 options: {
@@ -362,14 +384,19 @@
             chart.data.labels = labels;
             chart.data.datasets[0].data = prices;
             
-            // Draw yesterday's close reference line
+            // Draw reference lines
             const quote = latestQuotes[activeDataset];
             let priorClose = 0;
+            let openPrice = 0;
             if (quote) {
                 priorClose = quote.priorClose;
+                openPrice = quote.openPrice || 0;
             }
             const priorCloseData = new Array(prices.length).fill(priorClose);
             chart.data.datasets[1].data = priorCloseData;
+            
+            const openPriceData = openPrice > 0 ? new Array(prices.length).fill(openPrice) : [];
+            chart.data.datasets[2].data = openPriceData;
             
             // Dynamically change border color based on price change
             if (prices.length > 1) {
@@ -390,10 +417,11 @@
                 gradient.addColorStop(1, 'rgba(0, 0, 0, 0.00)');
                 chart.data.datasets[0].backgroundColor = gradient;
             }
-
+ 
             // Mirror left and right Y-axes bounds perfectly
             if (prices.length > 0) {
                 const allPrices = [...prices, priorClose];
+                if (openPrice > 0) allPrices.push(openPrice);
                 const minPrice = Math.min(...allPrices);
                 const maxPrice = Math.max(...allPrices);
                 const padding = (maxPrice - minPrice) * 0.15 || 1.0;
@@ -443,33 +471,36 @@
                 document.getElementById('spxPrice').innerText = spx.lastPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
                 document.getElementById('spxChange').innerHTML = formatChange(spx.priceChange, spx.percentChange);
                 document.getElementById('spxPrior').innerText = spx.priorClose.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('spxOpenVal').innerText = spx.openPrice ? spx.openPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : 'Waiting...';
                 document.getElementById('spxRange').innerText = `${spx.dailyLow.toFixed(2)} - ${spx.dailyHigh.toFixed(2)}`;
                 document.getElementById('spxTime').innerText = `WSJ: ${spx.wsj_timestamp}`;
             }
-
+ 
             // Futures (ES00)
             const fut = quotes.ES00;
             if (fut) {
                 document.getElementById('futPrice').innerText = fut.lastPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
                 document.getElementById('futChange').innerHTML = formatChange(fut.priceChange, fut.percentChange);
                 document.getElementById('futPrior').innerText = fut.priorClose.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('futOpenVal').innerText = fut.openPrice ? fut.openPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : 'Waiting...';
                 document.getElementById('futRange').innerText = `${fut.dailyLow.toFixed(2)} - ${fut.dailyHigh.toFixed(2)}`;
                 document.getElementById('futTime').innerText = `WSJ: ${fut.wsj_timestamp}`;
             }
-
+ 
             // SPY ETF
             const spy = quotes.SPY;
             if (spy) {
                 document.getElementById('spyPrice').innerText = spy.lastPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
                 document.getElementById('spyChange').innerHTML = formatChange(spy.priceChange, spy.percentChange);
                 document.getElementById('spyPrior').innerText = spy.priorClose.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('spyOpenVal').innerText = spy.openPrice ? spy.openPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : 'Waiting...';
                 document.getElementById('spyRange').innerText = `${spy.dailyLow.toFixed(2)} - ${spy.dailyHigh.toFixed(2)}`;
                 document.getElementById('spyTime').innerText = `WSJ: ${spy.wsj_timestamp}`;
             }
-
+ 
             // Resolution logic
             if (spx && fut && spy) {
-                const openVal = spx.lastPrice; // Note: Cash index lastPrice during market hours is active
+                const openVal = spx.openPrice || spx.lastPrice; 
                 const priorClose = spx.priorClose;
                 const isMarketOpen = spx.priceChange !== 0;
                 
@@ -477,7 +508,7 @@
                 let spreadText = (spread >= 0 ? '+' : '') + spread.toFixed(2);
                 let colorClass = spread >= 0 ? 'text-brand-green' : 'text-brand-red';
                 
-                document.getElementById('resSpxOpen').innerText = openVal.toLocaleString(undefined, {minimumFractionDigits: 2});
+                document.getElementById('resSpxOpen').innerText = spx.openPrice ? spx.openPrice.toLocaleString(undefined, {minimumFractionDigits: 2}) : 'Waiting...';
                 document.getElementById('resSpxClose').innerText = priorClose.toLocaleString(undefined, {minimumFractionDigits: 2});
                 document.getElementById('resSpread').className = `text-2xl font-bold font-mono ${colorClass}`;
                 document.getElementById('resSpread').innerText = spreadText;

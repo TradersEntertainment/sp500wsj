@@ -31,8 +31,31 @@ TICKERS = {
     "SPY": {"symbol": "FUND/US//SPY", "name": "S&P 500 ETF"}
 }
 
+def get_open_prices():
+    """Fetches the official today's open price from Yahoo Finance API as fallback."""
+    yahoo_symbols = {"SPX": "^GSPC", "SPY": "SPY", "ES00": "ES=F"}
+    open_prices = {}
+    for ticker, symbol in yahoo_symbols.items():
+        try:
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1d"
+            response = requests.get(url, headers=HEADERS, timeout=4)
+            if response.status_code == 200:
+                data = response.json()
+                result = data["chart"]["result"][0]
+                indicators = result.get("indicators", {})
+                quote = indicators.get("quote", [{}])[0]
+                open_list = quote.get("open", [])
+                if open_list and open_list[0] is not None:
+                    open_prices[ticker] = float(open_list[0])
+        except Exception as e:
+            print(f"Error fetching open price for {ticker} from Yahoo: {e}")
+    return open_prices
+
 def fetch_wsj_data():
     """Fetches the latest quotes from WSJ MDC API and updates cache."""
+    # Fetch open prices first
+    open_prices = get_open_prices()
+    
     instruments = [{"symbol": val["symbol"], "name": val["name"]} for val in TICKERS.values()]
     params = {
         "id": json.dumps({
@@ -62,6 +85,7 @@ def fetch_wsj_data():
                     wsj_timestamp = inst.get("timestamp", "")
                     
                     prior_close = last_price - price_change
+                    open_price = open_prices.get(ticker)
                     
                     # Store latest quote
                     data_cache["quotes"][ticker] = {
@@ -71,6 +95,7 @@ def fetch_wsj_data():
                         "priceChange": price_change,
                         "percentChange": pct_change,
                         "priorClose": prior_close,
+                        "openPrice": open_price,
                         "dailyHigh": high,
                         "dailyLow": low,
                         "wsj_timestamp": wsj_timestamp
