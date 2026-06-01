@@ -31,11 +31,26 @@ TICKERS = {
     "SPY": {"symbol": "FUND/US//SPY", "name": "S&P 500 ETF"}
 }
 
+# Cache for open prices to avoid spamming Yahoo Finance API every second
+cached_open_prices = {}
+last_open_fetch_time = 0
+
 def get_open_prices():
-    """Fetches the official today's open price from Yahoo Finance API as fallback."""
+    """Fetches the official today's open price from Yahoo Finance API as fallback with caching."""
+    global cached_open_prices, last_open_fetch_time
+    now = time.time()
+    
+    # Return cached data if fetched less than 5 minutes ago
+    if cached_open_prices and (now - last_open_fetch_time < 300):
+        return cached_open_prices
+        
     yahoo_symbols = {"SPX": "^GSPC", "SPY": "SPY", "ES00": "ES=F"}
     open_prices = {}
     for ticker, symbol in yahoo_symbols.items():
+        # Fall back to previous cached value if the new fetch fails
+        if ticker in cached_open_prices:
+            open_prices[ticker] = cached_open_prices[ticker]
+            
         try:
             url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1d"
             response = requests.get(url, headers=HEADERS, timeout=4)
@@ -49,6 +64,9 @@ def get_open_prices():
                     open_prices[ticker] = float(open_list[0])
         except Exception as e:
             print(f"Error fetching open price for {ticker} from Yahoo: {e}")
+            
+    cached_open_prices = open_prices
+    last_open_fetch_time = now
     return open_prices
 
 def fetch_wsj_data():
@@ -116,11 +134,11 @@ def fetch_wsj_data():
     return False
 
 def background_poller():
-    """Background thread to poll WSJ every 10 seconds."""
+    """Background thread to poll WSJ every 1 second."""
     # Run once at startup
     fetch_wsj_data()
     while True:
-        time.sleep(10)
+        time.sleep(1)
         fetch_wsj_data()
 
 # Start background poller thread
