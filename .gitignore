@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*$py.class
+state.json
+state_market.json
+.vscode/
+.idea/
+venv/
+.env
+*.metadata.json
+.system_generated/
+

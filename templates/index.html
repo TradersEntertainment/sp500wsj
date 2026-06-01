@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WSJ S&P 500 Polymarket Resolution Hub</title>
+    
+    <!-- Premium Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS (via CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Chart.js (via CDN) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Tailwind Config for harmonious colors -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Outfit', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        brand: {
+                            dark: '#0B0F19',
+                            card: '#161F30',
+                            accent: '#3B82F6',
+                            accentGlow: 'rgba(59, 130, 246, 0.15)',
+                            green: '#10B981',
+                            greenGlow: 'rgba(16, 185, 129, 0.15)',
+                            red: '#EF4444',
+                            redGlow: 'rgba(239, 68, 68, 0.15)',
+                            border: '#243249',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #080C14;
+            color: #E2E8F0;
+        }
+        .glass-panel {
+            background: rgba(22, 31, 48, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(36, 50, 73, 0.6);
+        }
+        .glow-green {
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.2);
+        }
+        .glow-red {
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.2);
+        }
+        .glow-blue {
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.25);
+        }
+    </style>
+</head>
+<body class="font-sans antialiased min-h-screen py-8 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-7xl mx-auto space-y-8">
+        
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-brand-border pb-6">
+            <div>
+                <div class="flex items-center gap-3">
+                    <span class="p-2 bg-brand-accent/20 text-brand-accent rounded-lg">
+                        <i data-lucide="trending-up" class="w-8 h-8"></i>
+                    </span>
+                    <h1 class="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
+                        S&P 500 Polymarket Resolution Hub
+                    </h1>
+                </div>
+                <p class="text-slate-400 mt-2 flex items-center gap-1 text-sm md:text-base">
+                    <span>Official Wall Street Journal (WSJ) API Live Quote Feed</span>
+                    <span class="inline-block w-1.5 h-1.5 rounded-full bg-brand-green animate-pulse mx-2"></span>
+                    <span class="text-brand-green font-medium">Auto-Syncing</span>
+                </p>
+            </div>
+            <div class="flex items-center gap-3 w-full md:w-auto">
+                <button id="syncBtn" onclick="forceRefresh()" class="flex items-center justify-center gap-2 px-5 py-2.5 bg-brand-accent hover:bg-blue-600 transition-all font-semibold rounded-xl text-white shadow-lg shadow-brand-accent/20 w-full md:w-auto active:scale-95">
+                    <i data-lucide="refresh-cw" id="syncIcon" class="w-4 h-4"></i>
+                    <span>Sync WSJ API</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- S&P 500 (SPX) Card -->
+            <div class="glass-panel rounded-3xl p-6 relative overflow-hidden transition-all duration-300 hover:-translate-y-1">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Cash Index</span>
+                        <h2 class="text-2xl font-bold text-white mt-1">S&P 500 (SPX)</h2>
+                    </div>
+                    <span class="px-3 py-1 bg-brand-accent/10 border border-brand-accent/30 text-brand-accent rounded-full text-xs font-semibold uppercase tracking-wider">
+                        WSJ Official
+                    </span>
+                </div>
+                <div class="mt-6 space-y-2">
+                    <div id="spxPrice" class="text-4xl font-extrabold font-mono tracking-tight">-</div>
+                    <div id="spxChange" class="text-sm font-semibold flex items-center gap-1">-</div>
+                </div>
+                <div class="mt-6 grid grid-cols-2 gap-4 border-t border-brand-border/60 pt-4 text-sm">
+                    <div>
+                        <span class="text-slate-400 block text-xs">Prior Close</span>
+                        <span id="spxPrior" class="font-bold font-mono text-slate-200">-</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 block text-xs">Daily Range</span>
+                        <span id="spxRange" class="font-bold font-mono text-slate-200">-</span>
+                    </div>
+                </div>
+                <div class="mt-4 text-[10px] text-slate-500 font-mono text-right" id="spxTime">Updated: -</div>
+            </div>
+
+            <!-- S&P 500 Futures Card -->
+            <div class="glass-panel rounded-3xl p-6 relative overflow-hidden transition-all duration-300 hover:-translate-y-1">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Pre-market Indicator</span>
+                        <h2 class="text-2xl font-bold text-white mt-1">SPX Futures (ES00)</h2>
+                    </div>
+                    <span class="px-3 py-1 bg-brand-accent/10 border border-brand-accent/30 text-brand-accent rounded-full text-xs font-semibold uppercase tracking-wider">
+                        CME Continuous
+                    </span>
+                </div>
+                <div class="mt-6 space-y-2">
+                    <div id="futPrice" class="text-4xl font-extrabold font-mono tracking-tight">-</div>
+                    <div id="futChange" class="text-sm font-semibold flex items-center gap-1">-</div>
+                </div>
+                <div class="mt-6 grid grid-cols-2 gap-4 border-t border-brand-border/60 pt-4 text-sm">
+                    <div>
+                        <span class="text-slate-400 block text-xs">Prior Close</span>
+                        <span id="futPrior" class="font-bold font-mono text-slate-200">-</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 block text-xs">Daily Range</span>
+                        <span id="futRange" class="font-bold font-mono text-slate-200">-</span>
+                    </div>
+                </div>
+                <div class="mt-4 text-[10px] text-slate-500 font-mono text-right" id="futTime">Updated: -</div>
+            </div>
+
+            <!-- S&P 500 ETF Card -->
+            <div class="glass-panel rounded-3xl p-6 relative overflow-hidden transition-all duration-300 hover:-translate-y-1">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Pre-market Session</span>
+                        <h2 class="text-2xl font-bold text-white mt-1">SPY ETF (SPY)</h2>
+                    </div>
+                    <span class="px-3 py-1 bg-brand-accent/10 border border-brand-accent/30 text-brand-accent rounded-full text-xs font-semibold uppercase tracking-wider">
+                        NYSE Arca
+                    </span>
+                </div>
+                <div class="mt-6 space-y-2">
+                    <div id="spyPrice" class="text-4xl font-extrabold font-mono tracking-tight">-</div>
+                    <div id="spyChange" class="text-sm font-semibold flex items-center gap-1">-</div>
+                </div>
+                <div class="mt-6 grid grid-cols-2 gap-4 border-t border-brand-border/60 pt-4 text-sm">
+                    <div>
+                        <span class="text-slate-400 block text-xs">Prior Close</span>
+                        <span id="spyPrior" class="font-bold font-mono text-slate-200">-</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 block text-xs">Daily Range</span>
+                        <span id="spyRange" class="font-bold font-mono text-slate-200">-</span>
+                    </div>
+                </div>
+                <div class="mt-4 text-[10px] text-slate-500 font-mono text-right" id="spyTime">Updated: -</div>
+            </div>
+
+        </div>
+
+        <!-- Polymarket Resolution Center -->
+        <div class="glass-panel rounded-3xl p-8 relative overflow-hidden">
+            <div class="absolute -right-16 -top-16 w-48 h-48 bg-brand-accent/10 rounded-full blur-3xl"></div>
+            
+            <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 border-b border-brand-border pb-6 mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold text-white flex items-center gap-2">
+                        <i data-lucide="award" class="text-brand-accent w-6 h-6"></i>
+                        Polymarket Contract Resolution Status
+                    </h2>
+                    <p class="text-slate-400 text-sm mt-1">
+                        Determines the winner based strictly on WSJ Historical Prices open/close values.
+                    </p>
+                </div>
+                <div id="resBadge" class="px-6 py-2 rounded-2xl text-sm font-bold uppercase tracking-wider transition-all duration-300">
+                    Calculating...
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-sm">
+                <div class="p-4 bg-brand-card/40 rounded-2xl border border-brand-border/30">
+                    <span class="text-slate-400 block text-xs mb-1">WSJ Cash Index Open</span>
+                    <span id="resSpxOpen" class="text-2xl font-bold font-mono text-white">-</span>
+                </div>
+                <div class="p-4 bg-brand-card/40 rounded-2xl border border-brand-border/30">
+                    <span class="text-slate-400 block text-xs mb-1">WSJ Prior Close</span>
+                    <span id="resSpxClose" class="text-2xl font-bold font-mono text-white">-</span>
+                </div>
+                <div class="p-4 bg-brand-card/40 rounded-2xl border border-brand-border/30">
+                    <span class="text-slate-400 block text-xs mb-1">Current Spread</span>
+                    <span id="resSpread" class="text-2xl font-bold font-mono text-white">-</span>
+                </div>
+                <div class="p-4 bg-brand-card/40 rounded-2xl border border-brand-border/30">
+                    <span class="text-slate-400 block text-xs mb-1">Premarket Prediction</span>
+                    <span id="resPred" class="text-2xl font-bold font-semibold text-white">-</span>
+                </div>
+            </div>
+
+            <!-- Alert Box -->
+            <div class="mt-6 p-4 bg-brand-accentGlow border border-brand-accent/20 rounded-2xl flex gap-3 text-xs md:text-sm text-slate-300">
+                <span class="text-brand-accent mt-0.5"><i data-lucide="info" class="w-5 h-5"></i></span>
+                <div>
+                    <span class="font-semibold text-white">Polymarket Resolution Rule Checklist:</span>
+                    Resolves to <span class="font-bold text-brand-green">UP</span> if the official WSJ Open price is strictly greater than the official WSJ Prior Close price. Resolves to <span class="font-bold text-brand-red">DOWN</span> if lower. Rounded to the nearest cent using standard rounding.
+                </div>
+            </div>
+        </div>
+
+        <!-- Live Chart Panel -->
+        <div class="glass-panel rounded-3xl p-6 lg:p-8">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold text-white flex items-center gap-2">
+                        <i data-lucide="line-chart" class="text-brand-accent w-6 h-6"></i>
+                        WSJ S&P 500 Real-Time Performance Chart
+                    </h2>
+                    <p class="text-slate-400 text-sm mt-1">Live tracking S&P 500, Futures & SPY ETF</p>
+                </div>
+                <div class="flex gap-2 bg-slate-900/80 p-1 rounded-xl border border-brand-border/50">
+                    <button onclick="changeChartDataset('SPX')" class="chart-tab px-4 py-1.5 rounded-lg text-xs font-semibold transition-all text-brand-accent bg-brand-card border border-brand-border/50" id="tabSPX">SPX Cash</button>
+                    <button onclick="changeChartDataset('ES00')" class="chart-tab px-4 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-400 hover:text-white" id="tabES00">Futures</button>
+                    <button onclick="changeChartDataset('SPY')" class="chart-tab px-4 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-400 hover:text-white" id="tabSPY">SPY ETF</button>
+                </div>
+            </div>
+            
+            <div class="h-[350px] relative w-full">
+                <canvas id="liveChart"></canvas>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Scripting for live updates -->
+    <script>
+        // Init Lucide Icons
+        lucide.createIcons();
+
+        let chart;
+        let activeDataset = 'SPX';
+        let fullHistoryData = { SPX: [], ES00: [], SPY: [] };
+
+        // Initialize empty chart
+        function initChart() {
+            const ctx = document.getElementById('liveChart').getContext('2d');
+            
+            // Premium gradient styling
+            const gradient = ctx.createLinearGradient(0, 0, 0, 350);
+            gradient.addColorStop(0, 'rgba(59, 130, 246, 0.25)');
+            gradient.addColorStop(1, 'rgba(59, 130, 246, 0.00)');
+
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'S&P 500',
+                        data: [],
+                        borderColor: '#3B82F6',
+                        borderWidth: 2,
+                        pointBackgroundColor: '#3B82F6',
+                        pointBorderColor: '#080C14',
+                        pointHoverRadius: 6,
+                        pointRadius: 2,
+                        fill: true,
+                        backgroundColor: gradient,
+                        tension: 0.15
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(36, 50, 73, 0.2)' },
+                            ticks: { color: '#94A3B8', font: { family: 'Outfit', size: 10 } }
+                        },
+                        y: {
+                            grid: { color: 'rgba(36, 50, 73, 0.2)' },
+                            ticks: { color: '#94A3B8', font: { family: 'Outfit', size: 10 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        function changeChartDataset(ticker) {
+            activeDataset = ticker;
+            
+            // Update Tab styles
+            document.querySelectorAll('.chart-tab').forEach(tab => {
+                tab.classList.remove('bg-brand-card', 'text-brand-accent', 'border', 'border-brand-border/50');
+                tab.classList.add('text-slate-400');
+            });
+            
+            const activeTab = document.getElementById(`tab${ticker}`);
+            activeTab.classList.add('bg-brand-card', 'text-brand-accent', 'border', 'border-brand-border/50');
+            activeTab.classList.remove('text-slate-400');
+
+            updateChartData();
+        }
+
+        function updateChartData() {
+            if (!chart) return;
+            
+            const tickerHistory = fullHistoryData[activeDataset] || [];
+            const labels = tickerHistory.map(pt => pt.time);
+            const prices = tickerHistory.map(pt => pt.price);
+            
+            chart.data.labels = labels;
+            chart.data.datasets[0].data = prices;
+            
+            // Dynamically change border color based on price change
+            if (prices.length > 1) {
+                const startPrice = prices[0];
+                const endPrice = prices[prices.length - 1];
+                const ctx = document.getElementById('liveChart').getContext('2d');
+                const gradient = ctx.createLinearGradient(0, 0, 0, 350);
+                
+                if (endPrice >= startPrice) {
+                    chart.data.datasets[0].borderColor = '#10B981';
+                    chart.data.datasets[0].pointBackgroundColor = '#10B981';
+                    gradient.addColorStop(0, 'rgba(16, 185, 129, 0.25)');
+                } else {
+                    chart.data.datasets[0].borderColor = '#EF4444';
+                    chart.data.datasets[0].pointBackgroundColor = '#EF4444';
+                    gradient.addColorStop(0, 'rgba(239, 68, 68, 0.25)');
+                }
+                gradient.addColorStop(1, 'rgba(0, 0, 0, 0.00)');
+                chart.data.datasets[0].backgroundColor = gradient;
+            }
+
+            chart.update();
+        }
+
+        // Fetch quotes & update UI
+        async function fetchUpdates() {
+            try {
+                const response = await fetch('/api/data');
+                const data = await response.json();
+                fullHistoryData = data.history;
+                updateUI(data.quotes);
+                updateChartData();
+            } catch (e) {
+                console.error("Failed to fetch live quotes:", e);
+            }
+        }
+
+        function formatChange(val, pct) {
+            const sign = val >= 0 ? '+' : '';
+            const color = val >= 0 ? 'text-brand-green' : 'text-brand-red';
+            const icon = val >= 0 ? 'trending-up' : 'trending-down';
+            
+            return `
+                <span class="${color} flex items-center gap-1 font-mono">
+                    <span>${sign}${val.toFixed(2)}</span>
+                    <span>(${sign}${pct.toFixed(2)}%)</span>
+                </span>
+            `;
+        }
+
+        function updateUI(quotes) {
+            if (!quotes) return;
+
+            // SPX
+            const spx = quotes.SPX;
+            if (spx) {
+                document.getElementById('spxPrice').innerText = spx.lastPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('spxChange').innerHTML = formatChange(spx.priceChange, spx.percentChange);
+                document.getElementById('spxPrior').innerText = spx.priorClose.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('spxRange').innerText = `${spx.dailyLow.toFixed(2)} - ${spx.dailyHigh.toFixed(2)}`;
+                document.getElementById('spxTime').innerText = `WSJ: ${spx.wsj_timestamp}`;
+            }
+
+            // Futures (ES00)
+            const fut = quotes.ES00;
+            if (fut) {
+                document.getElementById('futPrice').innerText = fut.lastPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('futChange').innerHTML = formatChange(fut.priceChange, fut.percentChange);
+                document.getElementById('futPrior').innerText = fut.priorClose.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('futRange').innerText = `${fut.dailyLow.toFixed(2)} - ${fut.dailyHigh.toFixed(2)}`;
+                document.getElementById('futTime').innerText = `WSJ: ${fut.wsj_timestamp}`;
+            }
+
+            // SPY ETF
+            const spy = quotes.SPY;
+            if (spy) {
+                document.getElementById('spyPrice').innerText = spy.lastPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('spyChange').innerHTML = formatChange(spy.priceChange, spy.percentChange);
+                document.getElementById('spyPrior').innerText = spy.priorClose.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('spyRange').innerText = `${spy.dailyLow.toFixed(2)} - ${spy.dailyHigh.toFixed(2)}`;
+                document.getElementById('spyTime').innerText = `WSJ: ${spy.wsj_timestamp}`;
+            }
+
+            // Resolution logic
+            if (spx && fut && spy) {
+                const openVal = spx.lastPrice; // Note: Cash index lastPrice during market hours is active
+                const priorClose = spx.priorClose;
+                const isMarketOpen = spx.priceChange !== 0;
+                
+                let spread = openVal - priorClose;
+                let spreadText = (spread >= 0 ? '+' : '') + spread.toFixed(2);
+                let colorClass = spread >= 0 ? 'text-brand-green' : 'text-brand-red';
+                
+                document.getElementById('resSpxOpen').innerText = openVal.toLocaleString(undefined, {minimumFractionDigits: 2});
+                document.getElementById('resSpxClose').innerText = priorClose.toLocaleString(undefined, {minimumFractionDigits: 2});
+                document.getElementById('resSpread').className = `text-2xl font-bold font-mono ${colorClass}`;
+                document.getElementById('resSpread').innerText = spreadText;
+
+                // Prediction based on premarket futures
+                let predText = fut.priceChange >= 0 ? 'UP (Futures Bullish)' : 'DOWN (Futures Bearish)';
+                let predColor = fut.priceChange >= 0 ? 'text-brand-green' : 'text-brand-red';
+                document.getElementById('resPred').className = `text-2xl font-semibold ${predColor}`;
+                document.getElementById('resPred').innerText = predText;
+
+                const resBadge = document.getElementById('resBadge');
+                if (isMarketOpen) {
+                    if (openVal > priorClose) {
+                        resBadge.innerText = "UP (RESOLVED)";
+                        resBadge.className = "px-6 py-2 rounded-2xl text-sm font-bold uppercase tracking-wider bg-brand-greenGlow border border-brand-green/30 text-brand-green glow-green";
+                    } else if (openVal < priorClose) {
+                        resBadge.innerText = "DOWN (RESOLVED)";
+                        resBadge.className = "px-6 py-2 rounded-2xl text-sm font-bold uppercase tracking-wider bg-brand-redGlow border border-brand-red/30 text-brand-red glow-red";
+                    } else {
+                        resBadge.innerText = "50-50 EQUAL";
+                        resBadge.className = "px-6 py-2 rounded-2xl text-sm font-bold uppercase tracking-wider bg-slate-900 border border-slate-700 text-slate-300";
+                    }
+                } else {
+                    resBadge.innerText = "MARKET CLOSED (WAITING)";
+                    resBadge.className = "px-6 py-2 rounded-2xl text-sm font-bold uppercase tracking-wider bg-brand-accentGlow border border-brand-accent/30 text-brand-accent glow-blue animate-pulse";
+                }
+            }
+        }
+
+        async function forceRefresh() {
+            const syncBtn = document.getElementById('syncBtn');
+            const syncIcon = document.getElementById('syncIcon');
+            
+            syncBtn.disabled = true;
+            syncIcon.classList.add('animate-spin');
+            
+            try {
+                const response = await fetch('/api/force_refresh');
+                const data = await response.json();
+                fullHistoryData = data.data.history;
+                updateUI(data.data.quotes);
+                updateChartData();
+            } catch (e) {
+                console.error("Force sync failed:", e);
+            } finally {
+                syncBtn.disabled = false;
+                syncIcon.classList.remove('animate-spin');
+            }
+        }
+
+        // Init and start poller
+        initChart();
+        fetchUpdates();
+        setInterval(fetchUpdates, 5000);
+    </script>
+</body>
+</html>
