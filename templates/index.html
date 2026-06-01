@@ -322,7 +322,13 @@
                             ticks: { color: '#94A3B8', font: { family: 'Outfit', size: 10 } }
                         },
                         y: {
+                            position: 'left',
                             grid: { color: 'rgba(36, 50, 73, 0.2)' },
+                            ticks: { color: '#94A3B8', font: { family: 'Outfit', size: 10 } }
+                        },
+                        yRight: {
+                            position: 'right',
+                            grid: { display: false },
                             ticks: { color: '#94A3B8', font: { family: 'Outfit', size: 10 } }
                         }
                     }
@@ -383,6 +389,19 @@
                 }
                 gradient.addColorStop(1, 'rgba(0, 0, 0, 0.00)');
                 chart.data.datasets[0].backgroundColor = gradient;
+            }
+
+            // Mirror left and right Y-axes bounds perfectly
+            if (prices.length > 0) {
+                const allPrices = [...prices, priorClose];
+                const minPrice = Math.min(...allPrices);
+                const maxPrice = Math.max(...allPrices);
+                const padding = (maxPrice - minPrice) * 0.15 || 1.0;
+                
+                chart.options.scales.y.min = minPrice - padding;
+                chart.options.scales.y.max = maxPrice + padding;
+                chart.options.scales.yRight.min = minPrice - padding;
+                chart.options.scales.yRight.max = maxPrice + padding;
             }
 
             chart.update();
