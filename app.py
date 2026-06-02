@@ -167,8 +167,12 @@ def fetch_wsj_data():
                         wsj_time_str = wsj_timestamp.split("T")[1][:8]
                         
                     if wsj_time_str:
-                        if not history_1s_list or history_1s_list[-1]["time"] != wsj_time_str:
-                            history_1s_list.append({"time": wsj_time_str, "price": last_price})
+                        if not history_1s_list or wsj_timestamp > history_1s_list[-1].get("full_time", ""):
+                            history_1s_list.append({
+                                "time": wsj_time_str, 
+                                "price": last_price,
+                                "full_time": wsj_timestamp
+                            })
                         if len(history_1s_list) > 300:
                             history_1s_list.pop(0)
                             
