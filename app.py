@@ -16,6 +16,11 @@ data_cache = {
         "ES00": [],
         "SPY": []
     },
+    "history_1s": {
+        "SPX": [],
+        "ES00": [],
+        "SPY": []
+    },
     "last_updated": None
 }
 
@@ -155,8 +160,25 @@ def fetch_wsj_data():
                         "wsj_timestamp": wsj_timestamp
                     }
                     
-                    # Provide 5m intraday history directly
-                    data_cache["history"][ticker] = history_data.get(ticker, [])
+                    # Maintain 1s history for the last 5 minutes (300 points)
+                    history_1s_list = data_cache["history_1s"].setdefault(ticker, [])
+                    wsj_time_str = ""
+                    if "T" in wsj_timestamp:
+                        wsj_time_str = wsj_timestamp.split("T")[1][:8]
+                        
+                    if wsj_time_str:
+                        if not history_1s_list or history_1s_list[-1]["time"] != wsj_time_str:
+                            history_1s_list.append({"time": wsj_time_str, "price": last_price})
+                        if len(history_1s_list) > 300:
+                            history_1s_list.pop(0)
+                            
+                    base_history = history_data.get(ticker, [])
+                    if history_1s_list:
+                        oldest_1s_time = history_1s_list[0]["time"]
+                        filtered_base = [pt for pt in base_history if pt["time"] < oldest_1s_time]
+                        data_cache["history"][ticker] = filtered_base + history_1s_list
+                    else:
+                        data_cache["history"][ticker] = base_history
                         
             return True
     except Exception as e:
