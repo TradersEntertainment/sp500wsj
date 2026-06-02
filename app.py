@@ -3,8 +3,73 @@ import requests
 import json
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+
+# Pyth API configuration for SPY ETF
+PYTH_HERMES_URL = "https://hermes.pyth.network/v2/updates/price/latest"
+SPY_PYTH_FEED_ID = "19e09bb805456ada3979a7d1cbb4b6d63babc3a0f8e8a9509f68afa5c4c11cd5"
+
+pyth_prior_close_cache = {
+    "target_timestamp": None,
+    "price": None
+}
+
+def get_pyth_prior_close():
+    global pyth_prior_close_cache
+    ny_tz = ZoneInfo("America/New_York")
+    now_ny = datetime.now(ny_tz)
+    
+    # Target date is today at 16:00:00 NY time
+    target_dt = datetime(now_ny.year, now_ny.month, now_ny.day, 16, 0, 0, tzinfo=ny_tz)
+    
+    if now_ny.weekday() in (5, 6): # Saturday or Sunday
+        # Target Friday's close
+        days_back = 1 if now_ny.weekday() == 5 else 2
+        target_dt = target_dt - timedelta(days=days_back)
+    else:
+        if now_ny < target_dt:
+            # Before 4:00 PM, target previous trading day's close
+            days_back = 3 if now_ny.weekday() == 0 else 1
+            target_dt = target_dt - timedelta(days=days_back)
+            
+    target_ts = int(target_dt.timestamp())
+    
+    if pyth_prior_close_cache["target_timestamp"] == target_ts and pyth_prior_close_cache["price"] is not None:
+        return pyth_prior_close_cache["price"]
+        
+    url = f"https://benchmarks.pyth.network/v1/updates/price/{target_ts}"
+    try:
+        response = requests.get(url, params={"ids": SPY_PYTH_FEED_ID}, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            parsed = data.get("parsed", [])
+            if parsed:
+                price_info = parsed[0]["price"]
+                price = int(price_info["price"]) * (10 ** int(price_info["expo"]))
+                pyth_prior_close_cache["target_timestamp"] = target_ts
+                pyth_prior_close_cache["price"] = float(price)
+                return float(price)
+    except Exception as e:
+        print(f"Error fetching Pyth prior close: {e}")
+        
+    return pyth_prior_close_cache["price"]
+
+def fetch_pyth_live_spy():
+    try:
+        response = requests.get(PYTH_HERMES_URL, params={"ids[]": SPY_PYTH_FEED_ID}, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            parsed = data.get("parsed", [])
+            if parsed:
+                price_info = parsed[0]["price"]
+                price = int(price_info["price"]) * (10 ** int(price_info["expo"]))
+                publish_time = price_info["publish_time"]
+                return float(price), publish_time
+    except Exception as e:
+        print(f"Error fetching Pyth live price: {e}")
+    return None, None
+
 
 app = Flask(__name__)
 
@@ -104,6 +169,10 @@ def fetch_wsj_data():
     open_prices = daily_data["open_prices"]
     history_data = daily_data["history"]
     
+    # Pre-fetch Pyth live data for SPY to override WSJ response
+    pyth_spy_price, pyth_pub_time = fetch_pyth_live_spy()
+    pyth_spy_prior_close = get_pyth_prior_close()
+    
     instruments = [{"symbol": val["symbol"], "name": val["name"]} for val in TICKERS.values()]
     params = {
         "id": json.dumps({
@@ -146,6 +215,31 @@ def fetch_wsj_data():
                         prior_close = last_price - price_change
                         open_price = open_prices.get(ticker)
                     
+                    wsj_prior_close = prior_close
+                    
+                    # If ticker is SPY, override with Pyth data to match Polymarket feed
+                    if ticker == "SPY":
+                        if pyth_spy_price is not None and pyth_spy_prior_close is not None:
+                            last_price = pyth_spy_price
+                            prior_close = pyth_spy_prior_close
+                            price_change = last_price - prior_close
+                            pct_change = (price_change / prior_close) * 100.0
+                            
+                            # Shift high, low, open prices by the Pyth-to-WSJ prior close offset
+                            offset = prior_close - wsj_prior_close
+                            high = high + offset
+                            low = low + offset
+                            if open_price is not None:
+                                open_price = open_price + offset
+                                
+                            # Convert Pyth Unix publish time to WSJ ISO timestamp format
+                            if pyth_pub_time:
+                                pyth_dt = datetime.fromtimestamp(pyth_pub_time, ZoneInfo("America/New_York"))
+                                formatted_ts = pyth_dt.strftime("%Y-%m-%dT%H:%M:%S") + pyth_dt.strftime("%z")
+                                if len(formatted_ts) > 6 and (formatted_ts[-5] in ('+', '-')):
+                                    formatted_ts = formatted_ts[:-2] + ":" + formatted_ts[-2:]
+                                wsj_timestamp = formatted_ts
+                    
                     # Store latest quote
                     data_cache["quotes"][ticker] = {
                         "name": inst.get("formattedName", inst.get("name")),
@@ -177,6 +271,12 @@ def fetch_wsj_data():
                             history_1s_list.pop(0)
                             
                     base_history = history_data.get(ticker, [])
+                    
+                    # Shift Yahoo historical points by prior close offset for SPY to prevent a chart jump
+                    if ticker == "SPY" and pyth_spy_prior_close is not None and wsj_prior_close is not None:
+                        offset = pyth_spy_prior_close - wsj_prior_close
+                        base_history = [{"time": pt["time"], "price": pt["price"] + offset} for pt in base_history]
+                        
                     if history_1s_list:
                         oldest_1s_time = history_1s_list[0]["time"]
                         filtered_base = [pt for pt in base_history if pt["time"] < oldest_1s_time]

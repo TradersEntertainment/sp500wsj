@@ -1,0 +1,4 @@
+- [x] Implement Pyth prior close caching mechanism in `app.py`
+- [x] Implement Pyth Hermes API client for live SPY price polling in `app.py`
+- [x] Merge Pyth data into the background polling flow and update the cached SPY quotes
+- [x] Verify the implementation locally
