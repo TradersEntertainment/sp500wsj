@@ -32,58 +32,72 @@ TICKERS = {
     "SPY": {"symbol": "FUND/US//SPY", "name": "S&P 500 ETF"}
 }
 
-# Cache for open prices to avoid spamming Yahoo Finance API every second
-cached_open_prices = {}
-last_open_fetch_time = 0
+# Cache for daily data (open prices and 5m history) to avoid spamming Yahoo Finance
+cached_daily_data = {"open_prices": {}, "history": {"SPX": [], "ES00": [], "SPY": []}}
+last_daily_fetch_time = 0
 
-def get_open_prices():
-    """Fetches the official today's open price from Yahoo Finance API as fallback with caching."""
-    global cached_open_prices, last_open_fetch_time
+def get_daily_data():
+    """Fetches official today's open price and 5m intraday history from Yahoo Finance."""
+    global cached_daily_data, last_daily_fetch_time
     now = time.time()
     
     # Return cached data if fetched less than 5 minutes ago
-    if cached_open_prices and (now - last_open_fetch_time < 300):
-        return cached_open_prices
+    if cached_daily_data["open_prices"] and (now - last_daily_fetch_time < 300):
+        return cached_daily_data
         
     yahoo_symbols = {"SPX": "^GSPC", "SPY": "SPY", "ES00": "ES=F"}
     open_prices = {}
+    history = {"SPX": [], "ES00": [], "SPY": []}
+    
     for ticker, symbol in yahoo_symbols.items():
         # Fall back to previous cached value if the new fetch fails
-        if ticker in cached_open_prices:
-            open_prices[ticker] = cached_open_prices[ticker]
+        if ticker in cached_daily_data["open_prices"]:
+            open_prices[ticker] = cached_daily_data["open_prices"][ticker]
+        if ticker in cached_daily_data["history"]:
+            history[ticker] = cached_daily_data["history"][ticker]
             
         try:
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1d"
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=5m&range=1d"
             response = requests.get(url, headers=HEADERS, timeout=4)
             if response.status_code == 200:
                 data = response.json()
                 result = data["chart"]["result"][0]
                 
-                # Check if the data is actually from today (EDT)
-                # If it's from a previous day, then market hasn't opened today
                 ny_date = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
-                
                 timestamp_list = result.get("timestamp", [])
+                
                 if timestamp_list:
-                    # Convert Yahoo's UTC timestamp to NY date
                     data_date = datetime.fromtimestamp(timestamp_list[0], ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+                    indicators = result.get("indicators", {})
+                    quote = indicators.get("quote", [{}])[0]
+                    
+                    # Only grab today's open price if the data is from today
                     if data_date == ny_date:
-                        indicators = result.get("indicators", {})
-                        quote = indicators.get("quote", [{}])[0]
                         open_list = quote.get("open", [])
                         if open_list and open_list[0] is not None:
                             open_prices[ticker] = float(open_list[0])
+                            
+                    # Always grab the chart history (if closed, it will show yesterday's chart)
+                    close_list = quote.get("close", [])
+                    ticker_hist = []
+                    for ts, c in zip(timestamp_list, close_list):
+                        if c is not None:
+                            time_str = datetime.fromtimestamp(ts, ZoneInfo("America/New_York")).strftime("%H:%M:%S")
+                            ticker_hist.append({"time": time_str, "price": float(c)})
+                    history[ticker] = ticker_hist
         except Exception as e:
-            print(f"Error fetching open price for {ticker} from Yahoo: {e}")
+            print(f"Error fetching daily data for {ticker} from Yahoo: {e}")
             
-    cached_open_prices = open_prices
-    last_open_fetch_time = now
-    return open_prices
+    cached_daily_data = {"open_prices": open_prices, "history": history}
+    last_daily_fetch_time = now
+    return cached_daily_data
 
 def fetch_wsj_data():
     """Fetches the latest quotes from WSJ MDC API and updates cache."""
-    # Fetch open prices first
-    open_prices = get_open_prices()
+    # Fetch open prices and history first
+    daily_data = get_daily_data()
+    open_prices = daily_data["open_prices"]
+    history_data = daily_data["history"]
     
     instruments = [{"symbol": val["symbol"], "name": val["name"]} for val in TICKERS.values()]
     params = {
@@ -141,14 +155,8 @@ def fetch_wsj_data():
                         "wsj_timestamp": wsj_timestamp
                     }
                     
-                    # Append to history (keep max 100 data points for live charts)
-                    history_list = data_cache["history"][ticker]
-                    history_list.append({
-                        "time": timestamp_str,
-                        "price": last_price
-                    })
-                    if len(history_list) > 100:
-                        history_list.pop(0)
+                    # Provide 5m intraday history directly
+                    data_cache["history"][ticker] = history_data.get(ticker, [])
                         
             return True
     except Exception as e:

@@ -380,7 +380,19 @@
         function updateChartData() {
             if (!chart) return;
             
-            const tickerHistory = fullHistoryData[activeDataset] || [];
+            let tickerHistory = [...(fullHistoryData[activeDataset] || [])];
+            const quote = latestQuotes[activeDataset];
+            
+            if (quote) {
+                let timeStr = quote.wsj_timestamp || "";
+                if (timeStr.includes("T")) {
+                    timeStr = timeStr.split("T")[1].substring(0, 8);
+                }
+                if (timeStr && quote.lastPrice) {
+                    tickerHistory.push({time: timeStr, price: quote.lastPrice});
+                }
+            }
+            
             const labels = tickerHistory.map(pt => pt.time);
             const prices = tickerHistory.map(pt => pt.price);
             
@@ -388,7 +400,6 @@
             chart.data.datasets[0].data = prices;
             
             // Draw reference lines
-            const quote = latestQuotes[activeDataset];
             let priorClose = 0;
             let openPrice = 0;
             if (quote) {
