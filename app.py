@@ -4,6 +4,7 @@ import json
 import threading
 import time
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 app = Flask(__name__)
 
@@ -57,11 +58,21 @@ def get_open_prices():
             if response.status_code == 200:
                 data = response.json()
                 result = data["chart"]["result"][0]
-                indicators = result.get("indicators", {})
-                quote = indicators.get("quote", [{}])[0]
-                open_list = quote.get("open", [])
-                if open_list and open_list[0] is not None:
-                    open_prices[ticker] = float(open_list[0])
+                
+                # Check if the data is actually from today (EDT)
+                # If it's from a previous day, then market hasn't opened today
+                ny_date = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+                
+                timestamp_list = result.get("timestamp", [])
+                if timestamp_list:
+                    # Convert Yahoo's UTC timestamp to NY date
+                    data_date = datetime.fromtimestamp(timestamp_list[0], ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+                    if data_date == ny_date:
+                        indicators = result.get("indicators", {})
+                        quote = indicators.get("quote", [{}])[0]
+                        open_list = quote.get("open", [])
+                        if open_list and open_list[0] is not None:
+                            open_prices[ticker] = float(open_list[0])
         except Exception as e:
             print(f"Error fetching open price for {ticker} from Yahoo: {e}")
             
@@ -102,8 +113,19 @@ def fetch_wsj_data():
                     low = float(inst.get("dailyLow", 0))
                     wsj_timestamp = inst.get("timestamp", "")
                     
-                    prior_close = last_price - price_change
-                    open_price = open_prices.get(ticker)
+                    ny_date = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+                    
+                    # If the timestamp from WSJ does not start with today's NY date,
+                    # it means the asset has NOT started trading today (e.g. SPX in premarket)
+                    if wsj_timestamp and not wsj_timestamp.startswith(ny_date):
+                        # The market hasn't opened. lastPrice is our prior close.
+                        prior_close = last_price
+                        price_change = 0.0
+                        pct_change = 0.0
+                        open_price = None  # No open price yet
+                    else:
+                        prior_close = last_price - price_change
+                        open_price = open_prices.get(ticker)
                     
                     # Store latest quote
                     data_cache["quotes"][ticker] = {

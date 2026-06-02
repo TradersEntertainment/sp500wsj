@@ -505,7 +505,7 @@
             if (spx && fut && spy) {
                 const openVal = spx.openPrice || spx.lastPrice; 
                 const priorClose = spx.priorClose;
-                const isMarketOpen = spx.priceChange !== 0;
+                const isMarketOpen = spx.openPrice != null;
                 
                 let spread = openVal - priorClose;
                 let spreadText = (spread >= 0 ? '+' : '') + spread.toFixed(2);
