@@ -96,6 +96,62 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
 
+es_close_cache = {
+    "target_timestamp": None,
+    "close_value": None
+}
+
+def get_cached_es_close():
+    global es_close_cache
+    ny_tz = ZoneInfo("America/New_York")
+    now_ny = datetime.now(ny_tz)
+    
+    # Target date is today at 16:00:00 NY time
+    target_dt = datetime(now_ny.year, now_ny.month, now_ny.day, 16, 0, 0, tzinfo=ny_tz)
+    
+    if now_ny.weekday() in (5, 6): # Saturday or Sunday
+        # Target Friday
+        days_back = 1 if now_ny.weekday() == 5 else 2
+        target_dt = target_dt - timedelta(days=days_back)
+    else:
+        if now_ny < target_dt:
+            # Before 4:00 PM, target previous trading day's close
+            days_back = 3 if now_ny.weekday() == 0 else 1
+            target_dt = target_dt - timedelta(days=days_back)
+            
+    target_ts = int(target_dt.timestamp())
+    
+    if es_close_cache["target_timestamp"] == target_ts and es_close_cache["close_value"] is not None:
+        return es_close_cache["close_value"]
+        
+    url = "https://query1.finance.yahoo.com/v8/finance/chart/ES=F?interval=5m&range=5d"
+    try:
+        response = requests.get(url, headers=HEADERS, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            result = data["chart"]["result"][0]
+            timestamps = result.get("timestamp", [])
+            indicators = result.get("indicators", {})
+            close_list = indicators.get("quote", [{}])[0].get("close", [])
+            
+            target_date_str = target_dt.strftime("%Y-%m-%d")
+            for ts, close in reversed(list(zip(timestamps, close_list))):
+                dt = datetime.fromtimestamp(ts, ny_tz)
+                if dt.strftime("%Y-%m-%d") == target_date_str:
+                    if dt.hour == 16 and dt.minute == 0 and close is not None:
+                        es_close_cache["target_timestamp"] = target_ts
+                        es_close_cache["close_value"] = float(close)
+                        return float(close)
+                    if dt.hour == 15 and dt.minute == 55 and close is not None:
+                        es_close_cache["target_timestamp"] = target_ts
+                        es_close_cache["close_value"] = float(close)
+                        return float(close)
+    except Exception as e:
+        print(f"Error fetching historical ES close: {e}")
+        
+    return es_close_cache["close_value"]
+
+
 TICKERS = {
     "SPX": {"symbol": "INDEX/US//SPX", "name": "S&P 500 Index"},
     "ES00": {"symbol": "FUTURE/US//S&P 500 FUTURES", "name": "S&P 500 Futures"},
@@ -283,6 +339,25 @@ def fetch_wsj_data():
                         data_cache["history"][ticker] = filtered_base + history_1s_list
                     else:
                         data_cache["history"][ticker] = base_history
+                
+                # Calculate S&P 500 expected open from ES00 Futures percentage move
+                spx_quote = data_cache["quotes"].get("SPX")
+                es_quote = data_cache["quotes"].get("ES00")
+                if spx_quote and es_quote:
+                    if spx_quote.get("openPrice") is None:
+                        prior_close = spx_quote.get("priorClose")
+                        current_es = es_quote.get("lastPrice")
+                        if prior_close and current_es:
+                            es_close_val = get_cached_es_close()
+                            if es_close_val:
+                                pct_change = (current_es - es_close_val) / es_close_val
+                                spx_quote["expectedOpenPrice"] = prior_close * (1 + pct_change)
+                            else:
+                                spx_quote["expectedOpenPrice"] = None
+                        else:
+                            spx_quote["expectedOpenPrice"] = None
+                    else:
+                        spx_quote["expectedOpenPrice"] = None
                         
             return True
     except Exception as e:

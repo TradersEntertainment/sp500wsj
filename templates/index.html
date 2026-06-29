@@ -121,7 +121,10 @@
                     </div>
                     <div>
                         <span class="text-slate-400 block text-[10px] whitespace-nowrap">Today's Open</span>
-                        <span id="spxOpenVal" class="font-bold font-mono text-slate-200">-</span>
+                        <div class="flex flex-col">
+                            <span id="spxOpenVal" class="font-bold font-mono text-slate-200">-</span>
+                            <span id="spxExpectedOpen" class="text-[9px] text-brand-accent font-semibold whitespace-nowrap hidden">Expected: -</span>
+                        </div>
                     </div>
                     <div>
                         <span class="text-slate-400 block text-[10px] whitespace-nowrap">Daily Range</span>
@@ -219,7 +222,10 @@
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-sm">
                 <div class="p-4 bg-brand-card/40 rounded-2xl border border-brand-border/30">
                     <span class="text-slate-400 block text-xs mb-1">WSJ Cash Index Open</span>
-                    <span id="resSpxOpen" class="text-2xl font-bold font-mono text-white">-</span>
+                    <div class="flex flex-col">
+                        <span id="resSpxOpen" class="text-2xl font-bold font-mono text-white">-</span>
+                        <span id="resSpxExpectedOpen" class="text-xs text-brand-accent font-semibold hidden">Expected: -</span>
+                    </div>
                 </div>
                 <div class="p-4 bg-brand-card/40 rounded-2xl border border-brand-border/30">
                     <span class="text-slate-400 block text-xs mb-1">WSJ Prior Close</span>
@@ -475,7 +481,22 @@
                 document.getElementById('spxPrice').innerText = spx.lastPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
                 document.getElementById('spxChange').innerHTML = formatChange(spx.priceChange, spx.percentChange);
                 document.getElementById('spxPrior').innerText = spx.priorClose.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                document.getElementById('spxOpenVal').innerText = spx.openPrice ? spx.openPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : 'Waiting...';
+                
+                const spxOpenEl = document.getElementById('spxOpenVal');
+                const spxExpectedEl = document.getElementById('spxExpectedOpen');
+                if (spx.openPrice) {
+                    spxOpenEl.innerText = spx.openPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    spxExpectedEl.classList.add('hidden');
+                } else {
+                    spxOpenEl.innerText = 'Waiting...';
+                    if (spx.expectedOpenPrice) {
+                        spxExpectedEl.innerText = 'Expected: ' + spx.expectedOpenPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                        spxExpectedEl.classList.remove('hidden');
+                    } else {
+                        spxExpectedEl.classList.add('hidden');
+                    }
+                }
+                
                 document.getElementById('spxRange').innerText = `${spx.dailyLow.toFixed(2)} - ${spx.dailyHigh.toFixed(2)}`;
                 document.getElementById('spxTime').innerText = `WSJ: ${spx.wsj_timestamp}`;
             }
@@ -512,7 +533,20 @@
                 let spreadText = (spread >= 0 ? '+' : '') + spread.toFixed(2);
                 let colorClass = spread >= 0 ? 'text-brand-green' : 'text-brand-red';
                 
-                document.getElementById('resSpxOpen').innerText = spx.openPrice ? spx.openPrice.toLocaleString(undefined, {minimumFractionDigits: 2}) : 'Waiting...';
+                const resSpxOpenEl = document.getElementById('resSpxOpen');
+                const resSpxExpectedEl = document.getElementById('resSpxExpectedOpen');
+                if (spx.openPrice) {
+                    resSpxOpenEl.innerText = spx.openPrice.toLocaleString(undefined, {minimumFractionDigits: 2});
+                    resSpxExpectedEl.classList.add('hidden');
+                } else {
+                    resSpxOpenEl.innerText = 'Waiting...';
+                    if (spx.expectedOpenPrice) {
+                        resSpxExpectedEl.innerText = 'Expected: ' + spx.expectedOpenPrice.toLocaleString(undefined, {minimumFractionDigits: 2});
+                        resSpxExpectedEl.classList.remove('hidden');
+                    } else {
+                        resSpxExpectedEl.classList.add('hidden');
+                    }
+                }
                 document.getElementById('resSpxClose').innerText = priorClose.toLocaleString(undefined, {minimumFractionDigits: 2});
                 document.getElementById('resSpread').className = `text-2xl font-bold font-mono ${colorClass}`;
                 document.getElementById('resSpread').innerText = spreadText;
