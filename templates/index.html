@@ -489,9 +489,11 @@
                     spxExpectedEl.classList.add('hidden');
                 } else {
                     spxOpenEl.innerText = 'Waiting...';
-                    if (spx.expectedOpenPrice) {
-                        spxExpectedEl.innerText = 'Expected: ' + spx.expectedOpenPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                        spxExpectedEl.classList.remove('hidden');
+                     if (spx.expectedOpenPrice) {
+                         const diffPct = ((spx.expectedOpenPrice - spx.priorClose) / spx.priorClose) * 100;
+                         const sign = diffPct >= 0 ? '+' : '';
+                         spxExpectedEl.innerText = 'Expected: ' + spx.expectedOpenPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' (' + sign + diffPct.toFixed(2) + '%)';
+                         spxExpectedEl.classList.remove('hidden');
                         
                         // Set color dynamically: green if expected to open UP, red if DOWN
                         if (spx.expectedOpenPrice > spx.priorClose) {
@@ -553,7 +555,9 @@
                 } else {
                     resSpxOpenEl.innerText = 'Waiting...';
                     if (spx.expectedOpenPrice) {
-                        resSpxExpectedEl.innerText = 'Expected: ' + spx.expectedOpenPrice.toLocaleString(undefined, {minimumFractionDigits: 2});
+                        const diffPct = ((spx.expectedOpenPrice - spx.priorClose) / spx.priorClose) * 100;
+                        const sign = diffPct >= 0 ? '+' : '';
+                        resSpxExpectedEl.innerText = 'Expected: ' + spx.expectedOpenPrice.toLocaleString(undefined, {minimumFractionDigits: 2}) + ' (' + sign + diffPct.toFixed(2) + '%)';
                         resSpxExpectedEl.classList.remove('hidden');
                         
                         // Set color dynamically: green if expected to open UP, red if DOWN
