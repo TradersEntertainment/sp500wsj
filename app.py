@@ -167,8 +167,19 @@ def get_daily_data():
     global cached_daily_data, last_daily_fetch_time
     now = time.time()
     
-    # Return cached data if fetched less than 5 minutes ago
-    if cached_daily_data["open_prices"] and (now - last_daily_fetch_time < 300):
+    # Determine the cache duration:
+    # During market open (9:29 AM - 9:35 AM NY time) and market close (3:59 PM - 4:05 PM NY time),
+    # refresh every 2 seconds to get the official open/close prices immediately.
+    # Otherwise, refresh every 5 minutes (300 seconds) to avoid spamming Yahoo Finance.
+    ny_tz = ZoneInfo("America/New_York")
+    now_ny = datetime.now(ny_tz)
+    is_market_open_window = (now_ny.hour == 9 and 29 <= now_ny.minute <= 35)
+    is_market_close_window = (now_ny.hour == 15 and now_ny.minute >= 59) or (now_ny.hour == 16 and now_ny.minute <= 5)
+    
+    cache_duration = 2 if (is_market_open_window or is_market_close_window) else 300
+    
+    # Return cached data if fetched less than cache_duration ago
+    if cached_daily_data["open_prices"] and (now - last_daily_fetch_time < cache_duration):
         return cached_daily_data
         
     yahoo_symbols = {"SPX": "^GSPC", "SPY": "SPY", "ES00": "ES=F"}
