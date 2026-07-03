@@ -269,11 +269,11 @@
                     <thead>
                         <tr class="border-b border-brand-border/60 text-slate-400 font-semibold text-[10px] md:text-xs uppercase tracking-wider">
                             <th class="pb-3 pt-2">Date</th>
-                            <th class="pb-3 pt-2">Prior Close</th>
-                            <th class="pb-3 pt-2">Open Price</th>
-                            <th class="pb-3 pt-2">Open Resolution</th>
-                            <th class="pb-3 pt-2">Close Price</th>
-                            <th class="pb-3 pt-2">Close Resolution</th>
+                            <th class="pb-3 pt-2 pr-4">Prior Close</th>
+                            <th class="pb-3 pt-2 px-3 bg-amber-500/[0.03] text-amber-200">☀️ Open Price</th>
+                            <th class="pb-3 pt-2 px-3 bg-amber-500/[0.03] text-amber-200">☀️ Open Res</th>
+                            <th class="pb-3 pt-2 px-3 bg-indigo-500/[0.04] text-indigo-200">🌙 Close Price</th>
+                            <th class="pb-3 pt-2 px-3 bg-indigo-500/[0.04] text-indigo-200">🌙 Close Res</th>
                         </tr>
                     </thead>
                     <tbody id="historyTableBody" class="divide-y divide-brand-border/30 font-mono text-slate-300">
@@ -526,14 +526,14 @@
                 let openBadge = '';
                 if (openVal) {
                     if (day.open_dir === 'UP') {
-                        openBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-greenGlow border border-brand-green/30 text-brand-green">UP</span>`;
+                        openBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-greenGlow border border-brand-green/30 text-brand-green">☀️ UP</span>`;
                     } else if (day.open_dir === 'DOWN') {
-                        openBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-redGlow border border-brand-red/30 text-brand-red">DOWN</span>`;
+                        openBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-redGlow border border-brand-red/30 text-brand-red">☀️ DOWN</span>`;
                     } else {
-                        openBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 border border-slate-700 text-slate-300">EQUAL</span>`;
+                        openBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 border border-slate-700 text-slate-300">☀️ EQUAL</span>`;
                     }
                 } else {
-                    openBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-accentGlow border border-brand-accent/30 text-brand-accent animate-pulse">PENDING</span>`;
+                    openBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-accentGlow border border-brand-accent/30 text-brand-accent animate-pulse">☀️ PENDING</span>`;
                 }
                 
                 // Close status calculations
@@ -548,16 +548,16 @@
                     closeSubText = `<span class="block text-[10px] ${closeSpreadColor} font-semibold mt-0.5">${closeSpreadText} (${(day.close_pct >= 0 ? '+' : '') + day.close_pct.toFixed(2) + '%'})</span>`;
                     
                     if (day.close_dir === 'UP') {
-                        closeBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-greenGlow border border-brand-green/30 text-brand-green">UP</span>`;
+                        closeBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-greenGlow border border-brand-green/30 text-brand-green">🌙 UP</span>`;
                     } else if (day.close_dir === 'DOWN') {
-                        closeBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-redGlow border border-brand-red/30 text-brand-red">DOWN</span>`;
+                        closeBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-redGlow border border-brand-red/30 text-brand-red">🌙 DOWN</span>`;
                     } else {
-                        closeBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 border border-slate-700 text-slate-300">EQUAL</span>`;
+                        closeBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 border border-slate-700 text-slate-300">🌙 EQUAL</span>`;
                     }
                 } else {
                     if (openVal) {
                         closeStr = 'Waiting...';
-                        closeBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-accentGlow border border-brand-accent/30 text-brand-accent animate-pulse">PENDING</span>`;
+                        closeBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-accentGlow border border-brand-accent/30 text-brand-accent animate-pulse">🌙 PENDING</span>`;
                     } else {
                         closeStr = '-';
                         closeBadge = `<span class="text-slate-500 font-semibold">-</span>`;
@@ -568,16 +568,16 @@
                     <tr class="hover:bg-brand-card/20 transition-all border-b border-brand-border/10">
                         <td class="py-3.5 font-sans font-semibold text-white">${day.date}</td>
                         <td class="py-3.5">${priorClose.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                        <td class="py-3.5 text-white">
+                        <td class="py-3.5 px-3 text-white bg-amber-500/[0.02]">
                             <div>${openStr}</div>
                             ${openSubText}
                         </td>
-                        <td class="py-3.5">${openBadge}</td>
-                        <td class="py-3.5 text-white">
+                        <td class="py-3.5 px-3 bg-amber-500/[0.02]">${openBadge}</td>
+                        <td class="py-3.5 px-3 text-white bg-indigo-500/[0.04]">
                             <div>${closeStr}</div>
                             ${closeSubText}
                         </td>
-                        <td class="py-3.5">${closeBadge}</td>
+                        <td class="py-3.5 px-3 bg-indigo-500/[0.04]">${closeBadge}</td>
                     </tr>
                 `;
             }).join('');
