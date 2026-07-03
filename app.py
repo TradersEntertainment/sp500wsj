@@ -165,6 +165,30 @@ def load_or_init_spx_history():
     save_spx_history(history)
     return history
 
+def send_telegram_message(text):
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    if not token or not chat_id:
+        # Silently fail if environment variables are not set
+        return False
+        
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "Markdown"
+    }
+    try:
+        response = requests.post(url, json=payload, timeout=10)
+        if response.status_code == 200:
+            print("Telegram message sent successfully.")
+            return True
+        else:
+            print(f"Failed to send Telegram message: {response.text}")
+    except Exception as e:
+        print(f"Error sending Telegram message: {e}")
+    return False
+
 def update_today_in_history():
     spx_quote = data_cache["quotes"].get("SPX")
     if not spx_quote:
@@ -218,7 +242,9 @@ def update_today_in_history():
             "open_dir": open_dir,
             "open_pct": float(open_pct) if open_price is not None else 0.0,
             "close_dir": close_dir,
-            "close_pct": float(close_pct) if close_price_to_save is not None else 0.0
+            "close_pct": float(close_pct) if close_price_to_save is not None else 0.0,
+            "open_notified": False,
+            "close_notified": False
         }
         history.insert(0, today_entry)
     else:
@@ -232,6 +258,38 @@ def update_today_in_history():
         today_entry["close"] = float(close_price_to_save) if close_price_to_save is not None else None
         today_entry["close_dir"] = close_dir
         today_entry["close_pct"] = float(close_pct)
+
+    # Check and trigger Telegram Open Notification
+    if today_entry.get("open") is not None and not today_entry.get("open_notified", False):
+        open_diff = today_entry["open"] - today_entry["prior_close"]
+        sign = "+" if open_diff >= 0 else ""
+        direction = "UP 🟢" if today_entry["open"] > today_entry["prior_close"] else "DOWN 🔴" if today_entry["open"] < today_entry["prior_close"] else "EQUAL ⚪"
+        msg = (
+            f"🔔 *S&P 500 (SPX) Açılış Bildirimi*\n\n"
+            f"📅 *Tarih:* `{today_str}`\n"
+            f"💵 *Açılış Fiyatı:* `{today_entry['open']:,.2f}`\n"
+            f"🔙 *Dünkü Kapanış:* `{today_entry['prior_close']:,.2f}`\n"
+            f"📊 *Değişim:* `{sign}{open_diff:,.2f} ({sign}{today_entry['open_pct']:.2f}%)`\n"
+            f"🎯 *Polymarket Yönü:* *{direction}*"
+        )
+        if send_telegram_message(msg):
+            today_entry["open_notified"] = True
+
+    # Check and trigger Telegram Close Notification
+    if today_entry.get("close") is not None and not today_entry.get("close_notified", False):
+        close_diff = today_entry["close"] - today_entry["prior_close"]
+        sign = "+" if close_diff >= 0 else ""
+        direction = "UP 🟢" if today_entry["close"] > today_entry["prior_close"] else "DOWN 🔴" if today_entry["close"] < today_entry["prior_close"] else "EQUAL ⚪"
+        msg = (
+            f"🔔 *S&P 500 (SPX) Kapanış Bildirimi*\n\n"
+            f"📅 *Tarih:* `{today_str}`\n"
+            f"💵 *Kapanış Fiyatı:* `{today_entry['close']:,.2f}`\n"
+            f"🔙 *Önceki Kapanış:* `{today_entry['prior_close']:,.2f}`\n"
+            f"📊 *Değişim:* `{sign}{close_diff:,.2f} ({sign}{today_entry['close_pct']:.2f}%)`\n"
+            f"🎯 *Günlük Yön:* *{direction}*"
+        )
+        if send_telegram_message(msg):
+            today_entry["close_notified"] = True
             
     if len(history) > 30:
         history = history[:30]
