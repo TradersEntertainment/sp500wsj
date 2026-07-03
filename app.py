@@ -406,7 +406,7 @@ def get_daily_data():
     is_market_open_window = (now_ny.hour == 9 and 29 <= now_ny.minute <= 35)
     is_market_close_window = (now_ny.hour == 15 and now_ny.minute >= 59) or (now_ny.hour == 16 and now_ny.minute <= 5)
     
-    cache_duration = 2 if (is_market_open_window or is_market_close_window) else 300
+    cache_duration = 1 if (is_market_open_window or is_market_close_window) else 300
     
     # Return cached data if fetched less than cache_duration ago
     if cached_daily_data["open_prices"] and (now - last_daily_fetch_time < cache_duration):
