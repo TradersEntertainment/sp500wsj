@@ -270,10 +270,9 @@
                         <tr class="border-b border-brand-border/60 text-slate-400 font-semibold text-[10px] md:text-xs uppercase tracking-wider">
                             <th class="pb-3 pt-2">Date</th>
                             <th class="pb-3 pt-2">Prior Close</th>
-                            <th class="pb-3 pt-2">Today's Open</th>
-                            <th class="pb-3 pt-2">Spread (Open vs Prior)</th>
+                            <th class="pb-3 pt-2">Open Price</th>
                             <th class="pb-3 pt-2">Open Resolution</th>
-                            <th class="pb-3 pt-2">Daily Close</th>
+                            <th class="pb-3 pt-2">Close Price</th>
                             <th class="pb-3 pt-2">Close Resolution</th>
                         </tr>
                     </thead>
@@ -522,6 +521,7 @@
                 let openSpread = openVal ? (openVal - priorClose) : 0;
                 let openSpreadText = openVal ? (openSpread >= 0 ? '+' : '') + openSpread.toFixed(2) : '-';
                 let openSpreadColor = openSpread >= 0 ? 'text-brand-green' : 'text-brand-red';
+                let openSubText = openVal ? `<span class="block text-[10px] ${openSpreadColor} font-semibold mt-0.5">${openSpreadText} (${(day.open_pct >= 0 ? '+' : '') + day.open_pct.toFixed(2) + '%'})</span>` : '';
                 
                 let openBadge = '';
                 if (openVal) {
@@ -539,8 +539,14 @@
                 // Close status calculations
                 let closeStr = '-';
                 let closeBadge = '';
+                let closeSubText = '';
                 if (closeVal) {
                     closeStr = closeVal.toLocaleString(undefined, {minimumFractionDigits: 2});
+                    let closeSpread = closeVal - priorClose;
+                    let closeSpreadText = (closeSpread >= 0 ? '+' : '') + closeSpread.toFixed(2);
+                    let closeSpreadColor = closeSpread >= 0 ? 'text-brand-green' : 'text-brand-red';
+                    closeSubText = `<span class="block text-[10px] ${closeSpreadColor} font-semibold mt-0.5">${closeSpreadText} (${(day.close_pct >= 0 ? '+' : '') + day.close_pct.toFixed(2) + '%'})</span>`;
+                    
                     if (day.close_dir === 'UP') {
                         closeBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-greenGlow border border-brand-green/30 text-brand-green">UP</span>`;
                     } else if (day.close_dir === 'DOWN') {
@@ -562,10 +568,15 @@
                     <tr class="hover:bg-brand-card/20 transition-all border-b border-brand-border/10">
                         <td class="py-3.5 font-sans font-semibold text-white">${day.date}</td>
                         <td class="py-3.5">${priorClose.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                        <td class="py-3.5 text-white">${openStr}</td>
-                        <td class="py-3.5 ${openSpreadColor} font-bold">${openSpreadText} (${openVal ? (day.open_pct >= 0 ? '+' : '') + day.open_pct.toFixed(2) + '%' : '-'})</td>
+                        <td class="py-3.5 text-white">
+                            <div>${openStr}</div>
+                            ${openSubText}
+                        </td>
                         <td class="py-3.5">${openBadge}</td>
-                        <td class="py-3.5 text-white">${closeStr}</td>
+                        <td class="py-3.5 text-white">
+                            <div>${closeStr}</div>
+                            ${closeSubText}
+                        </td>
                         <td class="py-3.5">${closeBadge}</td>
                     </tr>
                 `;
