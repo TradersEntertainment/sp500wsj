@@ -136,6 +136,15 @@ def fetch_spx_history_from_yahoo():
                     })
             
             history.sort(key=lambda x: x["date"], reverse=True)
+            if history:
+                latest_entry = history[0]
+                ny_tz = ZoneInfo("America/New_York")
+                now_ny = datetime.now(ny_tz)
+                today_str = now_ny.strftime("%Y-%m-%d")
+                if latest_entry["date"] == today_str and now_ny.hour < 16:
+                    latest_entry["close"] = None
+                    latest_entry["close_dir"] = "EQUAL"
+                    latest_entry["close_pct"] = 0.0
             return history
     except Exception as e:
         print(f"Error fetching history from Yahoo: {e}")
@@ -191,20 +200,25 @@ def update_today_in_history():
         
     close_dir = "EQUAL"
     close_pct = 0.0
-    if last_price is not None:
-        close_dir = "UP" if last_price > prior_close else "DOWN" if last_price < prior_close else "EQUAL"
-        close_pct = ((last_price - prior_close) / prior_close) * 100
+    close_price_to_save = None
+    
+    # Close price is only final after 16:00 (4:00 PM) NY time (which is 23:00 Turkey time)
+    is_market_closed = now_ny.hour >= 16
+    if is_market_closed and last_price is not None:
+        close_price_to_save = last_price
+        close_dir = "UP" if close_price_to_save > prior_close else "DOWN" if close_price_to_save < prior_close else "EQUAL"
+        close_pct = ((close_price_to_save - prior_close) / prior_close) * 100
         
     if today_entry is None:
         today_entry = {
             "date": today_str,
             "prior_close": float(prior_close),
             "open": float(open_price) if open_price is not None else None,
-            "close": float(last_price) if last_price is not None else None,
+            "close": float(close_price_to_save) if close_price_to_save is not None else None,
             "open_dir": open_dir,
             "open_pct": float(open_pct) if open_price is not None else 0.0,
             "close_dir": close_dir,
-            "close_pct": float(close_pct) if last_price is not None else 0.0
+            "close_pct": float(close_pct) if close_price_to_save is not None else 0.0
         }
         history.insert(0, today_entry)
     else:
@@ -212,10 +226,12 @@ def update_today_in_history():
             today_entry["open"] = float(open_price)
             today_entry["open_dir"] = open_dir
             today_entry["open_pct"] = float(open_pct)
-        if last_price is not None:
-            today_entry["close"] = float(last_price)
-            today_entry["close_dir"] = close_dir
-            today_entry["close_pct"] = float(close_pct)
+        else:
+            today_entry["open"] = None
+            
+        today_entry["close"] = float(close_price_to_save) if close_price_to_save is not None else None
+        today_entry["close_dir"] = close_dir
+        today_entry["close_pct"] = float(close_pct)
             
     if len(history) > 30:
         history = history[:30]

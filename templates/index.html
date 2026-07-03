@@ -537,9 +537,10 @@
                 }
                 
                 // Close status calculations
-                let closeStr = closeVal ? closeVal.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-';
+                let closeStr = '-';
                 let closeBadge = '';
                 if (closeVal) {
+                    closeStr = closeVal.toLocaleString(undefined, {minimumFractionDigits: 2});
                     if (day.close_dir === 'UP') {
                         closeBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-greenGlow border border-brand-green/30 text-brand-green">UP</span>`;
                     } else if (day.close_dir === 'DOWN') {
@@ -548,7 +549,13 @@
                         closeBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 border border-slate-700 text-slate-300">EQUAL</span>`;
                     }
                 } else {
-                    closeBadge = `<span class="text-slate-500 font-semibold">-</span>`;
+                    if (openVal) {
+                        closeStr = 'Waiting...';
+                        closeBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-accentGlow border border-brand-accent/30 text-brand-accent animate-pulse">PENDING</span>`;
+                    } else {
+                        closeStr = '-';
+                        closeBadge = `<span class="text-slate-500 font-semibold">-</span>`;
+                    }
                 }
                 
                 return `
