@@ -636,5 +636,71 @@ def force_refresh():
     with cache_lock:
         return jsonify({"success": success, "data": data_cache})
 
+@app.route('/api/test_telegram')
+def test_telegram_route():
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    if not token or not chat_id:
+        return jsonify({
+            "success": False,
+            "error": "Telegram environment variables (TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID) are not configured."
+        }), 400
+        
+    # Get latest complete entry from history (usually the second entry if today is waiting, or first if today is closed)
+    history = data_cache.get("spx_history", [])
+    test_entry = None
+    for entry in history:
+        if entry.get("open") is not None and entry.get("close") is not None:
+            test_entry = entry
+            break
+            
+    if not test_entry:
+        return jsonify({
+            "success": False,
+            "error": "No complete historical entry found in history."
+        }), 404
+        
+    # Send test open message
+    open_diff = test_entry["open"] - test_entry["prior_close"]
+    open_pct = (open_diff / test_entry["prior_close"]) * 100
+    sign_open = "+" if open_diff >= 0 else ""
+    dir_open = "UP 🟢" if test_entry["open"] > test_entry["prior_close"] else "DOWN 🔴" if test_entry["open"] < test_entry["prior_close"] else "EQUAL ⚪"
+    
+    msg_open = (
+        f"🧪 *[TEST]* 🔔 *S&P 500 (SPX) Açılış Bildirimi*\n\n"
+        f"📅 *Tarih:* `{test_entry['date']}`\n"
+        f"💵 *Açılış Fiyatı:* `{test_entry['open']:,.2f}`\n"
+        f"🔙 *Dünkü Kapanış:* `{test_entry['prior_close']:,.2f}`\n"
+        f"📊 *Değişim:* `{sign_open}{open_diff:,.2f} ({sign_open}{open_pct:.2f}%)`\n"
+        f"🎯 *Polymarket Yönü:* *{dir_open}*"
+    )
+    
+    # Send test close message
+    close_diff = test_entry["close"] - test_entry["prior_close"]
+    close_pct = (close_diff / test_entry["prior_close"]) * 100
+    sign_close = "+" if close_diff >= 0 else ""
+    dir_close = "UP 🟢" if test_entry["close"] > test_entry["prior_close"] else "DOWN 🔴" if test_entry["close"] < test_entry["prior_close"] else "EQUAL ⚪"
+    
+    msg_close = (
+        f"🧪 *[TEST]* 🔔 *S&P 500 (SPX) Kapanış Bildirimi*\n\n"
+        f"📅 *Tarih:* `{test_entry['date']}`\n"
+        f"💵 *Kapanış Fiyatı:* `{test_entry['close']:,.2f}`\n"
+        f"🔙 *Önceki Kapanış:* `{test_entry['prior_close']:,.2f}`\n"
+        f"📊 *Değişim:* `{sign_close}{close_diff:,.2f} ({sign_close}{close_pct:.2f}%)`\n"
+        f"🎯 *Günlük Yön:* *{dir_close}*"
+    )
+    
+    success_open = send_telegram_message(msg_open)
+    success_close = send_telegram_message(msg_close)
+    
+    return jsonify({
+        "success": success_open and success_close,
+        "details": {
+            "open_notification_sent": success_open,
+            "close_notification_sent": success_close,
+            "target_date": test_entry["date"]
+        }
+    })
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
