@@ -694,14 +694,28 @@ def index():
 
 @app.route('/api/data')
 def get_data():
+    ny_tz = ZoneInfo("America/New_York")
+    now_ny = datetime.now(ny_tz)
+    today_str = now_ny.strftime("%Y-%m-%d")
+    
     with cache_lock:
-        return jsonify(data_cache)
+        response_data = dict(data_cache)
+        response_data["is_holiday"] = is_market_holiday(today_str)
+        response_data["is_weekend"] = now_ny.weekday() in (5, 6)
+        return jsonify(response_data)
 
 @app.route('/api/force_refresh')
 def force_refresh():
     success = fetch_wsj_data()
+    ny_tz = ZoneInfo("America/New_York")
+    now_ny = datetime.now(ny_tz)
+    today_str = now_ny.strftime("%Y-%m-%d")
+    
     with cache_lock:
-        return jsonify({"success": success, "data": data_cache})
+        response_data = dict(data_cache)
+        response_data["is_holiday"] = is_market_holiday(today_str)
+        response_data["is_weekend"] = now_ny.weekday() in (5, 6)
+        return jsonify({"success": success, "data": response_data})
 
 @app.route('/api/test_telegram')
 def test_telegram_route():
