@@ -263,14 +263,15 @@ def update_today_in_history():
     if today_entry.get("open") is not None and not today_entry.get("open_notified", False):
         open_diff = today_entry["open"] - today_entry["prior_close"]
         sign = "+" if open_diff >= 0 else ""
-        direction = "UP 🟢" if today_entry["open"] > today_entry["prior_close"] else "DOWN 🔴" if today_entry["open"] < today_entry["prior_close"] else "EQUAL ⚪"
+        direction_emoji = "🟢" if open_diff > 0 else "🔴" if open_diff < 0 else "⚪"
+        direction_text = "UP" if open_diff > 0 else "DOWN" if open_diff < 0 else "EQUAL"
+        
         msg = (
-            f"🔔 *S&P 500 (SPX) Açılış Bildirimi*\n\n"
+            f"{direction_emoji} *{direction_text} Olarak Açıldı!* (Fark: `{sign}{open_diff:,.2f}` / `{sign}{today_entry['open_pct']:.2f}%`)\n\n"
+            f"🔔 *S&P 500 (SPX) Açılış Detayları:*\n"
             f"📅 *Tarih:* `{today_str}`\n"
             f"💵 *Açılış Fiyatı:* `{today_entry['open']:,.2f}`\n"
-            f"🔙 *Dünkü Kapanış:* `{today_entry['prior_close']:,.2f}`\n"
-            f"📊 *Değişim:* `{sign}{open_diff:,.2f} ({sign}{today_entry['open_pct']:.2f}%)`\n"
-            f"🎯 *Polymarket Yönü:* *{direction}*"
+            f"🔙 *Dünkü Kapanış:* `{today_entry['prior_close']:,.2f}`"
         )
         if send_telegram_message(msg):
             today_entry["open_notified"] = True
@@ -279,14 +280,15 @@ def update_today_in_history():
     if today_entry.get("close") is not None and not today_entry.get("close_notified", False):
         close_diff = today_entry["close"] - today_entry["prior_close"]
         sign = "+" if close_diff >= 0 else ""
-        direction = "UP 🟢" if today_entry["close"] > today_entry["prior_close"] else "DOWN 🔴" if today_entry["close"] < today_entry["prior_close"] else "EQUAL ⚪"
+        direction_emoji = "🟢" if close_diff > 0 else "🔴" if close_diff < 0 else "⚪"
+        direction_text = "UP" if close_diff > 0 else "DOWN" if close_diff < 0 else "EQUAL"
+        
         msg = (
-            f"🔔 *S&P 500 (SPX) Kapanış Bildirimi*\n\n"
+            f"{direction_emoji} *{direction_text} Olarak Sonuçlandı!* (Fark: `{sign}{close_diff:,.2f}` / `{sign}{today_entry['close_pct']:.2f}%`)\n\n"
+            f"🔔 *S&P 500 (SPX) Kapanış Detayları:*\n"
             f"📅 *Tarih:* `{today_str}`\n"
             f"💵 *Kapanış Fiyatı:* `{today_entry['close']:,.2f}`\n"
-            f"🔙 *Önceki Kapanış:* `{today_entry['prior_close']:,.2f}`\n"
-            f"📊 *Değişim:* `{sign}{close_diff:,.2f} ({sign}{today_entry['close_pct']:.2f}%)`\n"
-            f"🎯 *Günlük Yön:* *{direction}*"
+            f"🔙 *Önceki Kapanış:* `{today_entry['prior_close']:,.2f}`"
         )
         if send_telegram_message(msg):
             today_entry["close_notified"] = True
@@ -664,30 +666,30 @@ def test_telegram_route():
     open_diff = test_entry["open"] - test_entry["prior_close"]
     open_pct = (open_diff / test_entry["prior_close"]) * 100
     sign_open = "+" if open_diff >= 0 else ""
-    dir_open = "UP 🟢" if test_entry["open"] > test_entry["prior_close"] else "DOWN 🔴" if test_entry["open"] < test_entry["prior_close"] else "EQUAL ⚪"
+    dir_open_emoji = "🟢" if open_diff > 0 else "🔴" if open_diff < 0 else "⚪"
+    dir_open_text = "UP" if open_diff > 0 else "DOWN" if open_diff < 0 else "EQUAL"
     
     msg_open = (
-        f"🧪 *[TEST]* 🔔 *S&P 500 (SPX) Açılış Bildirimi*\n\n"
+        f"🧪 *[TEST]* {dir_open_emoji} *{dir_open_text} Olarak Açıldı!* (Fark: `{sign_open}{open_diff:,.2f}` / `{sign_open}{open_pct:.2f}%`)\n\n"
+        f"🔔 *S&P 500 (SPX) Açılış Detayları:*\n"
         f"📅 *Tarih:* `{test_entry['date']}`\n"
         f"💵 *Açılış Fiyatı:* `{test_entry['open']:,.2f}`\n"
-        f"🔙 *Dünkü Kapanış:* `{test_entry['prior_close']:,.2f}`\n"
-        f"📊 *Değişim:* `{sign_open}{open_diff:,.2f} ({sign_open}{open_pct:.2f}%)`\n"
-        f"🎯 *Polymarket Yönü:* *{dir_open}*"
+        f"🔙 *Dünkü Kapanış:* `{test_entry['prior_close']:,.2f}`"
     )
     
     # Send test close message
     close_diff = test_entry["close"] - test_entry["prior_close"]
     close_pct = (close_diff / test_entry["prior_close"]) * 100
     sign_close = "+" if close_diff >= 0 else ""
-    dir_close = "UP 🟢" if test_entry["close"] > test_entry["prior_close"] else "DOWN 🔴" if test_entry["close"] < test_entry["prior_close"] else "EQUAL ⚪"
+    dir_close_emoji = "🟢" if close_diff > 0 else "🔴" if close_diff < 0 else "⚪"
+    dir_close_text = "UP" if close_diff > 0 else "DOWN" if close_diff < 0 else "EQUAL"
     
     msg_close = (
-        f"🧪 *[TEST]* 🔔 *S&P 500 (SPX) Kapanış Bildirimi*\n\n"
+        f"🧪 *[TEST]* {dir_close_emoji} *{dir_close_text} Olarak Sonuçlandı!* (Fark: `{sign_close}{close_diff:,.2f}` / `{sign_close}{close_pct:.2f}%`)\n\n"
+        f"🔔 *S&P 500 (SPX) Kapanış Detayları:*\n"
         f"📅 *Tarih:* `{test_entry['date']}`\n"
         f"💵 *Kapanış Fiyatı:* `{test_entry['close']:,.2f}`\n"
-        f"🔙 *Önceki Kapanış:* `{test_entry['prior_close']:,.2f}`\n"
-        f"📊 *Değişim:* `{sign_close}{close_diff:,.2f} ({sign_close}{close_pct:.2f}%)`\n"
-        f"🎯 *Günlük Yön:* *{dir_close}*"
+        f"🔙 *Önceki Kapanış:* `{test_entry['prior_close']:,.2f}`"
     )
     
     success_open = send_telegram_message(msg_open)
