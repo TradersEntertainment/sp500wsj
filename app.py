@@ -392,6 +392,16 @@ TICKERS = {
 cached_daily_data = {"open_prices": {}, "history": {"SPX": [], "ES00": [], "SPY": []}}
 last_daily_fetch_time = 0
 
+# Track access blocks / bans (403, 429 status codes)
+consecutive_failures = {
+    "WSJ": 0,
+    "Yahoo": 0
+}
+ban_alert_sent = {
+    "WSJ": False,
+    "Yahoo": False
+}
+
 def get_daily_data():
     """Fetches official today's open price and 5m intraday history from Yahoo Finance."""
     global cached_daily_data, last_daily_fetch_time
@@ -427,6 +437,11 @@ def get_daily_data():
             url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=5m&range=1d"
             response = requests.get(url, headers=HEADERS, timeout=4)
             if response.status_code == 200:
+                consecutive_failures["Yahoo"] = 0
+                if ban_alert_sent["Yahoo"]:
+                    send_telegram_message("✅ *Sistem Uyarısı: Yahoo Finance Erişimi Normale Döndü*\n\nYahoo Finance bağlantısı tekrar başarıyla kuruldu.")
+                    ban_alert_sent["Yahoo"] = False
+                
                 data = response.json()
                 result = data["chart"]["result"][0]
                 
@@ -452,6 +467,16 @@ def get_daily_data():
                             time_str = datetime.fromtimestamp(ts, ZoneInfo("America/New_York")).strftime("%H:%M:%S")
                             ticker_hist.append({"time": time_str, "price": float(c)})
                     history[ticker] = ticker_hist
+            elif response.status_code in (403, 429):
+                consecutive_failures["Yahoo"] += 1
+                if consecutive_failures["Yahoo"] >= 5 and not ban_alert_sent["Yahoo"]:
+                    send_telegram_message(
+                        f"⚠️ *Sistem Uyarısı: Yahoo Finance Erişim Engeli (Ban)*\n\n"
+                        f"Sunucu, Yahoo Finance API tarafından engellendi veya kısıtlandı.\n"
+                        f"🔴 *Hata Kodu:* `{response.status_code}`\n"
+                        f"🕒 Lütfen Railway üzerinden IP değiştirmeyi (Redeploy) veya sunucuyu yeniden başlatmayı deneyin."
+                    )
+                    ban_alert_sent["Yahoo"] = True
         except Exception as e:
             print(f"Error fetching daily data for {ticker} from Yahoo: {e}")
             
@@ -482,6 +507,11 @@ def fetch_wsj_data():
     try:
         response = requests.get(WSJ_URL, params=params, headers=HEADERS, timeout=8)
         if response.status_code == 200:
+            consecutive_failures["WSJ"] = 0
+            if ban_alert_sent["WSJ"]:
+                send_telegram_message("✅ *Sistem Uyarısı: WSJ Erişimi Normale Döndü*\n\nWSJ API bağlantısı tekrar başarıyla kuruldu.")
+                ban_alert_sent["WSJ"] = False
+                
             raw_data = response.json()
             instruments_data = raw_data.get("data", {}).get("instruments", [])
             
@@ -604,6 +634,16 @@ def fetch_wsj_data():
                 update_today_in_history()
                         
             return True
+        elif response.status_code in (403, 429):
+            consecutive_failures["WSJ"] += 1
+            if consecutive_failures["WSJ"] >= 5 and not ban_alert_sent["WSJ"]:
+                send_telegram_message(
+                    f"⚠️ *Sistem Uyarısı: WSJ Erişim Engeli (Ban)*\n\n"
+                    f"Sunucu, WSJ API tarafından engellendi veya kısıtlandı.\n"
+                    f"🔴 *Hata Kodu:* `{response.status_code}`\n"
+                    f"🕒 Lütfen Railway üzerinden IP değiştirmeyi (Redeploy) veya sunucuyu yeniden başlatmayı deneyin."
+                )
+                ban_alert_sent["WSJ"] = True
     except Exception as e:
         print(f"Error fetching WSJ data: {e}")
     return False
