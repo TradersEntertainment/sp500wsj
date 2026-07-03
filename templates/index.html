@@ -251,6 +251,39 @@
             </div>
         </div>
 
+        <!-- S&P 500 Open & Close History -->
+        <div class="glass-panel rounded-3xl p-8 relative overflow-hidden">
+            <div class="absolute -right-16 -top-16 w-48 h-48 bg-brand-accent/5 rounded-full blur-3xl"></div>
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold text-white flex items-center gap-2">
+                        <i data-lucide="history" class="text-brand-accent w-6 h-6"></i>
+                        S&P 500 (SPX) Open & Close History
+                    </h2>
+                    <p class="text-slate-400 text-sm mt-1">Last 10 trading days performance and Polymarket resolution direction.</p>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs md:text-sm">
+                    <thead>
+                        <tr class="border-b border-brand-border/60 text-slate-400 font-semibold text-[10px] md:text-xs uppercase tracking-wider">
+                            <th class="pb-3 pt-2">Date</th>
+                            <th class="pb-3 pt-2">Prior Close</th>
+                            <th class="pb-3 pt-2">Today's Open</th>
+                            <th class="pb-3 pt-2">Spread (Open vs Prior)</th>
+                            <th class="pb-3 pt-2">Open Resolution</th>
+                            <th class="pb-3 pt-2">Daily Close</th>
+                            <th class="pb-3 pt-2">Close Resolution</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyTableBody" class="divide-y divide-brand-border/30 font-mono text-slate-300">
+                        <!-- History rows will be injected here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
         <!-- Live Chart Panel -->
         <div class="glass-panel rounded-3xl p-6 lg:p-8">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
@@ -452,7 +485,7 @@
                 const data = await response.json();
                 fullHistoryData = data.history;
                 latestQuotes = data.quotes;
-                updateUI(data.quotes);
+                updateUI(data.quotes, data.spx_history);
                 updateChartData();
             } catch (e) {
                 console.error("Failed to fetch live quotes:", e);
@@ -472,8 +505,69 @@
             `;
         }
 
-        function updateUI(quotes) {
+        function renderHistoryTable(history) {
+            const tbody = document.getElementById('historyTableBody');
+            if (!tbody || !history) return;
+            
+            // Limit to last 10 days
+            const last10 = history.slice(0, 10);
+            
+            tbody.innerHTML = last10.map(day => {
+                const priorClose = day.prior_close;
+                const openVal = day.open;
+                const closeVal = day.close;
+                
+                // Open status calculations
+                let openStr = openVal ? openVal.toLocaleString(undefined, {minimumFractionDigits: 2}) : 'Waiting...';
+                let openSpread = openVal ? (openVal - priorClose) : 0;
+                let openSpreadText = openVal ? (openSpread >= 0 ? '+' : '') + openSpread.toFixed(2) : '-';
+                let openSpreadColor = openSpread >= 0 ? 'text-brand-green' : 'text-brand-red';
+                
+                let openBadge = '';
+                if (openVal) {
+                    if (day.open_dir === 'UP') {
+                        openBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-greenGlow border border-brand-green/30 text-brand-green">UP</span>`;
+                    } else if (day.open_dir === 'DOWN') {
+                        openBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-redGlow border border-brand-red/30 text-brand-red">DOWN</span>`;
+                    } else {
+                        openBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 border border-slate-700 text-slate-300">EQUAL</span>`;
+                    }
+                } else {
+                    openBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-accentGlow border border-brand-accent/30 text-brand-accent animate-pulse">PENDING</span>`;
+                }
+                
+                // Close status calculations
+                let closeStr = closeVal ? closeVal.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-';
+                let closeBadge = '';
+                if (closeVal) {
+                    if (day.close_dir === 'UP') {
+                        closeBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-greenGlow border border-brand-green/30 text-brand-green">UP</span>`;
+                    } else if (day.close_dir === 'DOWN') {
+                        closeBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-redGlow border border-brand-red/30 text-brand-red">DOWN</span>`;
+                    } else {
+                        closeBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 border border-slate-700 text-slate-300">EQUAL</span>`;
+                    }
+                } else {
+                    closeBadge = `<span class="text-slate-500 font-semibold">-</span>`;
+                }
+                
+                return `
+                    <tr class="hover:bg-brand-card/20 transition-all border-b border-brand-border/10">
+                        <td class="py-3.5 font-sans font-semibold text-white">${day.date}</td>
+                        <td class="py-3.5">${priorClose.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                        <td class="py-3.5 text-white">${openStr}</td>
+                        <td class="py-3.5 ${openSpreadColor} font-bold">${openSpreadText} (${openVal ? (day.open_pct >= 0 ? '+' : '') + day.open_pct.toFixed(2) + '%' : '-'})</td>
+                        <td class="py-3.5">${openBadge}</td>
+                        <td class="py-3.5 text-white">${closeStr}</td>
+                        <td class="py-3.5">${closeBadge}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function updateUI(quotes, spxHistory) {
             if (!quotes) return;
+            renderHistoryTable(spxHistory);
 
             // SPX
             const spx = quotes.SPX;
@@ -616,7 +710,7 @@
                 const data = await response.json();
                 fullHistoryData = data.data.history;
                 latestQuotes = data.data.quotes;
-                updateUI(data.data.quotes);
+                updateUI(data.data.quotes, data.data.spx_history);
                 updateChartData();
             } catch (e) {
                 console.error("Force sync failed:", e);

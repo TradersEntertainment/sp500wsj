@@ -9,4 +9,5 @@ venv/
 .env
 *.metadata.json
 .system_generated/
+spx_history.json
 

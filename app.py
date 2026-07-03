@@ -71,6 +71,159 @@ def fetch_pyth_live_spy():
     return None, None
 
 
+import os
+
+HISTORY_FILE = "/data/spx_history.json"
+if not os.path.exists("/data"):
+    HISTORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "spx_history.json")
+
+def save_spx_history(history):
+    try:
+        dir_name = os.path.dirname(HISTORY_FILE)
+        if dir_name and not os.path.exists(dir_name):
+            os.makedirs(dir_name, exist_ok=True)
+        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(history, f, indent=2)
+    except Exception as e:
+        print(f"Error saving history file: {e}")
+
+def fetch_spx_history_from_yahoo():
+    # Fetch daily chart for ^GSPC (S&P 500 Index) for the last 1 month
+    url = "https://query1.finance.yahoo.com/v8/finance/chart/^GSPC?interval=1d&range=1mo"
+    try:
+        response = requests.get(url, headers=HEADERS, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            result = data["chart"]["result"][0]
+            timestamps = result.get("timestamp", [])
+            indicators = result.get("indicators", {})
+            quote = indicators.get("quote", [{}])[0]
+            opens = quote.get("open", [])
+            closes = quote.get("close", [])
+            
+            ny_tz = ZoneInfo("America/New_York")
+            history = []
+            
+            # We need at least 2 days to compare open with prior close
+            for i in range(1, len(timestamps)):
+                prev_close = closes[i-1]
+                curr_open = opens[i]
+                curr_close = closes[i]
+                ts = timestamps[i]
+                dt = datetime.fromtimestamp(ts, ny_tz)
+                
+                if prev_close is not None and curr_open is not None:
+                    open_diff = curr_open - prev_close
+                    open_pct = (open_diff / prev_close) * 100
+                    open_dir = "UP" if curr_open > prev_close else "DOWN" if curr_open < prev_close else "EQUAL"
+                    
+                    close_pct = 0.0
+                    close_dir = "EQUAL"
+                    if curr_close is not None:
+                        close_diff = curr_close - prev_close
+                        close_pct = (close_diff / prev_close) * 100
+                        close_dir = "UP" if curr_close > prev_close else "DOWN" if curr_close < prev_close else "EQUAL"
+                        
+                    history.append({
+                        "date": dt.strftime("%Y-%m-%d"),
+                        "prior_close": float(prev_close),
+                        "open": float(curr_open),
+                        "close": float(curr_close) if curr_close is not None else None,
+                        "open_dir": open_dir,
+                        "open_pct": float(open_pct),
+                        "close_dir": close_dir,
+                        "close_pct": float(close_pct)
+                    })
+            
+            history.sort(key=lambda x: x["date"], reverse=True)
+            return history
+    except Exception as e:
+        print(f"Error fetching history from Yahoo: {e}")
+    return []
+
+def load_or_init_spx_history():
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+                history = json.load(f)
+                if history:
+                    history.sort(key=lambda x: x["date"], reverse=True)
+                    return history
+        except Exception as e:
+            print(f"Error loading history file: {e}")
+            
+    history = fetch_spx_history_from_yahoo()
+    save_spx_history(history)
+    return history
+
+def update_today_in_history():
+    spx_quote = data_cache["quotes"].get("SPX")
+    if not spx_quote:
+        return
+        
+    ny_tz = ZoneInfo("America/New_York")
+    now_ny = datetime.now(ny_tz)
+    today_str = now_ny.strftime("%Y-%m-%d")
+    
+    if now_ny.weekday() in (5, 6): # Weekend
+        return
+        
+    prior_close = spx_quote.get("priorClose")
+    open_price = spx_quote.get("openPrice")
+    last_price = spx_quote.get("lastPrice")
+    
+    if prior_close is None:
+        return
+        
+    history = data_cache["spx_history"]
+    
+    today_entry = None
+    for entry in history:
+        if entry["date"] == today_str:
+            today_entry = entry
+            break
+            
+    open_dir = "EQUAL"
+    open_pct = 0.0
+    if open_price is not None:
+        open_dir = "UP" if open_price > prior_close else "DOWN" if open_price < prior_close else "EQUAL"
+        open_pct = ((open_price - prior_close) / prior_close) * 100
+        
+    close_dir = "EQUAL"
+    close_pct = 0.0
+    if last_price is not None:
+        close_dir = "UP" if last_price > prior_close else "DOWN" if last_price < prior_close else "EQUAL"
+        close_pct = ((last_price - prior_close) / prior_close) * 100
+        
+    if today_entry is None:
+        today_entry = {
+            "date": today_str,
+            "prior_close": float(prior_close),
+            "open": float(open_price) if open_price is not None else None,
+            "close": float(last_price) if last_price is not None else None,
+            "open_dir": open_dir,
+            "open_pct": float(open_pct) if open_price is not None else 0.0,
+            "close_dir": close_dir,
+            "close_pct": float(close_pct) if last_price is not None else 0.0
+        }
+        history.insert(0, today_entry)
+    else:
+        if open_price is not None:
+            today_entry["open"] = float(open_price)
+            today_entry["open_dir"] = open_dir
+            today_entry["open_pct"] = float(open_pct)
+        if last_price is not None:
+            today_entry["close"] = float(last_price)
+            today_entry["close_dir"] = close_dir
+            today_entry["close_pct"] = float(close_pct)
+            
+    if len(history) > 30:
+        history = history[:30]
+        data_cache["spx_history"] = history
+        
+    save_spx_history(history)
+
+
 app = Flask(__name__)
 
 # Cache structure to hold the latest WSJ quotes and historical data for charts
@@ -86,6 +239,7 @@ data_cache = {
         "ES00": [],
         "SPY": []
     },
+    "spx_history": [],
     "last_updated": None
 }
 
@@ -369,6 +523,9 @@ def fetch_wsj_data():
                             spx_quote["expectedOpenPrice"] = None
                     else:
                         spx_quote["expectedOpenPrice"] = None
+                
+                # Update SPX history file in the persistent volume
+                update_today_in_history()
                         
             return True
     except Exception as e:
@@ -382,6 +539,9 @@ def background_poller():
     while True:
         time.sleep(1)
         fetch_wsj_data()
+
+# Initialize persistent SPX history
+data_cache["spx_history"] = load_or_init_spx_history()
 
 # Start background poller thread
 poller_thread = threading.Thread(target=background_poller, daemon=True)
