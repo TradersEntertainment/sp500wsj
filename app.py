@@ -648,60 +648,65 @@ def test_telegram_route():
             "error": "Telegram environment variables (TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID) are not configured."
         }), 400
         
-    # Get latest complete entry from history (usually the second entry if today is waiting, or first if today is closed)
+    # Get latest 3 complete entries from history
     history = data_cache.get("spx_history", [])
-    test_entry = None
+    complete_entries = []
     for entry in history:
         if entry.get("open") is not None and entry.get("close") is not None:
-            test_entry = entry
-            break
+            complete_entries.append(entry)
+            if len(complete_entries) == 3:
+                break
             
-    if not test_entry:
+    if not complete_entries:
         return jsonify({
             "success": False,
-            "error": "No complete historical entry found in history."
+            "error": "No complete historical entries found in history."
         }), 404
         
-    # Send test open message
-    open_diff = test_entry["open"] - test_entry["prior_close"]
-    open_pct = (open_diff / test_entry["prior_close"]) * 100
-    sign_open = "+" if open_diff >= 0 else ""
-    dir_open_emoji = "🟢" if open_diff > 0 else "🔴" if open_diff < 0 else "⚪"
-    dir_open_text = "UP" if open_diff > 0 else "DOWN" if open_diff < 0 else "EQUAL"
-    
-    msg_open = (
-        f"🧪 *[TEST]* {dir_open_emoji} *{dir_open_text} Olarak Açıldı!* (Fark: `{sign_open}{open_diff:,.2f}` / `{sign_open}{open_pct:.2f}%`)\n\n"
-        f"🔔 *S&P 500 (SPX) Açılış Detayları:*\n"
-        f"📅 *Tarih:* `{test_entry['date']}`\n"
-        f"💵 *Açılış Fiyatı:* `{test_entry['open']:,.2f}`\n"
-        f"🔙 *Dünkü Kapanış:* `{test_entry['prior_close']:,.2f}`"
-    )
-    
-    # Send test close message
-    close_diff = test_entry["close"] - test_entry["prior_close"]
-    close_pct = (close_diff / test_entry["prior_close"]) * 100
-    sign_close = "+" if close_diff >= 0 else ""
-    dir_close_emoji = "🟢" if close_diff > 0 else "🔴" if close_diff < 0 else "⚪"
-    dir_close_text = "UP" if close_diff > 0 else "DOWN" if close_diff < 0 else "EQUAL"
-    
-    msg_close = (
-        f"🧪 *[TEST]* {dir_close_emoji} *{dir_close_text} Olarak Sonuçlandı!* (Fark: `{sign_close}{close_diff:,.2f}` / `{sign_close}{close_pct:.2f}%`)\n\n"
-        f"🔔 *S&P 500 (SPX) Kapanış Detayları:*\n"
-        f"📅 *Tarih:* `{test_entry['date']}`\n"
-        f"💵 *Kapanış Fiyatı:* `{test_entry['close']:,.2f}`\n"
-        f"🔙 *Önceki Kapanış:* `{test_entry['prior_close']:,.2f}`"
-    )
-    
-    success_open = send_telegram_message(msg_open)
-    success_close = send_telegram_message(msg_close)
-    
+    results = []
+    for test_entry in complete_entries:
+        # Send test open message
+        open_diff = test_entry["open"] - test_entry["prior_close"]
+        open_pct = (open_diff / test_entry["prior_close"]) * 100
+        sign_open = "+" if open_diff >= 0 else ""
+        dir_open_emoji = "🟢" if open_diff > 0 else "🔴" if open_diff < 0 else "⚪"
+        dir_open_text = "UP" if open_diff > 0 else "DOWN" if open_diff < 0 else "EQUAL"
+        
+        msg_open = (
+            f"🧪 *[TEST]* {dir_open_emoji} *{dir_open_text} Olarak Açıldı!* (Fark: `{sign_open}{open_diff:,.2f}` / `{sign_open}{open_pct:.2f}%`)\n\n"
+            f"🔔 *S&P 500 (SPX) Açılış Detayları:*\n"
+            f"📅 *Tarih:* `{test_entry['date']}`\n"
+            f"💵 *Açılış Fiyatı:* `{test_entry['open']:,.2f}`\n"
+            f"🔙 *Dünkü Kapanış:* `{test_entry['prior_close']:,.2f}`"
+        )
+        
+        # Send test close message
+        close_diff = test_entry["close"] - test_entry["prior_close"]
+        close_pct = (close_diff / test_entry["prior_close"]) * 100
+        sign_close = "+" if close_diff >= 0 else ""
+        dir_close_emoji = "🟢" if close_diff > 0 else "🔴" if close_diff < 0 else "⚪"
+        dir_close_text = "UP" if close_diff > 0 else "DOWN" if close_diff < 0 else "EQUAL"
+        
+        msg_close = (
+            f"🧪 *[TEST]* {dir_close_emoji} *{dir_close_text} Olarak Sonuçlandı!* (Fark: `{sign_close}{close_diff:,.2f}` / `{sign_close}{close_pct:.2f}%`)\n\n"
+            f"🔔 *S&P 500 (SPX) Kapanış Detayları:*\n"
+            f"📅 *Tarih:* `{test_entry['date']}`\n"
+            f"💵 *Kapanış Fiyatı:* `{test_entry['close']:,.2f}`\n"
+            f"🔙 *Önceki Kapanış:* `{test_entry['prior_close']:,.2f}`"
+        )
+        
+        success_open = send_telegram_message(msg_open)
+        success_close = send_telegram_message(msg_close)
+        
+        results.append({
+            "date": test_entry["date"],
+            "open_sent": success_open,
+            "close_sent": success_close
+        })
+        
     return jsonify({
-        "success": success_open and success_close,
-        "details": {
-            "open_notification_sent": success_open,
-            "close_notification_sent": success_close,
-            "target_date": test_entry["date"]
-        }
+        "success": all(r["open_sent"] and r["close_sent"] for r in results),
+        "details": results
     })
 
 if __name__ == '__main__':
