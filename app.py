@@ -189,6 +189,22 @@ def send_telegram_message(text):
         print(f"Error sending Telegram message: {e}")
     return False
 
+def is_market_holiday(date_str):
+    # Hardcoded US Stock Market holidays for 2026
+    holidays_2026 = {
+        "2026-01-01",  # New Year's Day
+        "2026-01-19",  # Martin Luther King Jr. Day
+        "2026-02-16",  # Presidents' Day
+        "2026-04-03",  # Good Friday
+        "2026-05-25",  # Memorial Day
+        "2026-06-19",  # Juneteenth
+        "2026-07-03",  # Independence Day (Observed)
+        "2026-09-07",  # Labor Day
+        "2026-11-26",  # Thanksgiving Day
+        "2026-12-25",  # Christmas Day
+    }
+    return date_str in holidays_2026
+
 def update_today_in_history():
     spx_quote = data_cache["quotes"].get("SPX")
     if not spx_quote:
@@ -198,7 +214,16 @@ def update_today_in_history():
     now_ny = datetime.now(ny_tz)
     today_str = now_ny.strftime("%Y-%m-%d")
     
-    if now_ny.weekday() in (5, 6): # Weekend
+    # If today is a weekend or market holiday, do not update/insert and remove today's entry if it exists
+    if now_ny.weekday() in (5, 6) or is_market_holiday(today_str):
+        history = data_cache.get("spx_history", [])
+        modified = False
+        for entry in list(history):
+            if entry["date"] == today_str:
+                history.remove(entry)
+                modified = True
+        if modified:
+            save_spx_history(history)
         return
         
     prior_close = spx_quote.get("priorClose")
