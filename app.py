@@ -247,13 +247,22 @@ def update_today_in_history():
         open_dir = "UP" if open_price > prior_close else "DOWN" if open_price < prior_close else "EQUAL"
         open_pct = ((open_price - prior_close) / prior_close) * 100
         
+    # Open price is settled 3 minutes after 09:30 AM NY time (16:33 TR time)
+    is_open_settled = (now_ny.hour > 9) or (now_ny.hour == 9 and now_ny.minute >= 3)
+    
+    # Close price is settled 4 minutes after 16:00 PM NY time (23:04 TR time) after MOC closing auction completes
+    is_close_settled = (now_ny.hour > 16) or (now_ny.hour == 16 and now_ny.minute >= 4)
+    
     close_dir = "EQUAL"
     close_pct = 0.0
     close_price_to_save = None
     
-    # Close price is only final after 16:00 (4:00 PM) NY time (which is 23:00 Turkey time)
-    is_market_closed = now_ny.hour >= 16
-    if is_market_closed and last_price is not None:
+    if is_close_settled and last_price is not None:
+        close_price_to_save = last_price
+        close_dir = "UP" if close_price_to_save > prior_close else "DOWN" if close_price_to_save < prior_close else "EQUAL"
+        close_pct = ((close_price_to_save - prior_close) / prior_close) * 100
+    elif now_ny.hour >= 16 and last_price is not None:
+        # Temporary preview for website UI during MOC auction window (16:00 - 16:04 NY)
         close_price_to_save = last_price
         close_dir = "UP" if close_price_to_save > prior_close else "DOWN" if close_price_to_save < prior_close else "EQUAL"
         close_pct = ((close_price_to_save - prior_close) / prior_close) * 100
@@ -269,7 +278,11 @@ def update_today_in_history():
             "close_dir": close_dir,
             "close_pct": float(close_pct) if close_price_to_save is not None else 0.0,
             "open_notified": False,
-            "close_notified": False
+            "open_notified_dir": None,
+            "open_notified_price": None,
+            "close_notified": False,
+            "close_notified_dir": None,
+            "close_notified_price": None
         }
         history.insert(0, today_entry)
     else:
@@ -284,8 +297,8 @@ def update_today_in_history():
         today_entry["close_dir"] = close_dir
         today_entry["close_pct"] = float(close_pct)
 
-    # Check and trigger Telegram Open Notification
-    if today_entry.get("open") is not None and not today_entry.get("open_notified", False):
+    # Check and trigger Telegram Open Notification ONLY AFTER settlement window (09:33 NY / 16:33 TR)
+    if today_entry.get("open") is not None and is_open_settled and not today_entry.get("open_notified", False):
         open_diff = today_entry["open"] - today_entry["prior_close"]
         sign = "+" if open_diff >= 0 else ""
         direction_emoji = "🟢" if open_diff > 0 else "🔴" if open_diff < 0 else "⚪"
@@ -295,14 +308,35 @@ def update_today_in_history():
             f"{direction_emoji} *{direction_text} Olarak Açıldı!* (Fark: `{sign}{open_diff:,.2f}` / `{sign}{today_entry['open_pct']:.2f}%`)\n\n"
             f"🔔 *S&P 500 (SPX) Açılış Detayları:*\n"
             f"📅 *Tarih:* `{today_str}`\n"
-            f"💵 *Açılış Fiyatı:* `{today_entry['open']:,.2f}`\n"
+            f"💵 *Kesinleşen Açılış Fiyatı:* `{today_entry['open']:,.2f}`\n"
             f"🔙 *Dünkü Kapanış:* `{today_entry['prior_close']:,.2f}`"
         )
         if send_telegram_message(msg):
             today_entry["open_notified"] = True
+            today_entry["open_notified_dir"] = direction_text
+            today_entry["open_notified_price"] = today_entry["open"]
 
-    # Check and trigger Telegram Close Notification
-    if today_entry.get("close") is not None and not today_entry.get("close_notified", False):
+    # Failsafe: Open Correction Notification if direction changes after notification
+    elif today_entry.get("open_notified") and is_open_settled and today_entry.get("open") is not None:
+        curr_open_dir = "UP" if today_entry["open"] > today_entry["prior_close"] else "DOWN" if today_entry["open"] < today_entry["prior_close"] else "EQUAL"
+        if today_entry.get("open_notified_dir") and today_entry.get("open_notified_dir") != curr_open_dir:
+            open_diff = today_entry["open"] - today_entry["prior_close"]
+            sign = "+" if open_diff >= 0 else ""
+            dir_emoji = "🟢" if open_diff > 0 else "🔴" if open_diff < 0 else "⚪"
+            
+            msg = (
+                f"⚠️ *AÇILIŞ DÜZELTME BİLDİRİMİ* 🔔\n\n"
+                f"S&P 500 Resmi Açılış Fiyatı Kesinleşti!\n"
+                f"❌ *Önceki Erken Bildirim:* `{today_entry.get('open_notified_dir')}` ({today_entry.get('open_notified_price', 0):,.2f})\n"
+                f"✅ *GERÇEK KESİNLEŞEN:* {dir_emoji} *{curr_open_dir}* (`{today_entry['open']:,.2f}` | Fark: `{sign}{open_diff:,.2f}`)\n"
+                f"📅 *Tarih:* `{today_str}`"
+            )
+            if send_telegram_message(msg):
+                today_entry["open_notified_dir"] = curr_open_dir
+                today_entry["open_notified_price"] = today_entry["open"]
+
+    # Check and trigger Telegram Close Notification ONLY AFTER MOC Closing Auction settles (16:04 NY / 23:04 TR)
+    if today_entry.get("close") is not None and is_close_settled and not today_entry.get("close_notified", False):
         close_diff = today_entry["close"] - today_entry["prior_close"]
         sign = "+" if close_diff >= 0 else ""
         direction_emoji = "🟢" if close_diff > 0 else "🔴" if close_diff < 0 else "⚪"
@@ -312,11 +346,32 @@ def update_today_in_history():
             f"{direction_emoji} *{direction_text} Olarak Sonuçlandı!* (Fark: `{sign}{close_diff:,.2f}` / `{sign}{today_entry['close_pct']:.2f}%`)\n\n"
             f"🔔 *S&P 500 (SPX) Kapanış Detayları:*\n"
             f"📅 *Tarih:* `{today_str}`\n"
-            f"💵 *Kapanış Fiyatı:* `{today_entry['close']:,.2f}`\n"
+            f"💵 *Kesinleşen Kapanış Fiyatı:* `{today_entry['close']:,.2f}`\n"
             f"🔙 *Önceki Kapanış:* `{today_entry['prior_close']:,.2f}`"
         )
         if send_telegram_message(msg):
             today_entry["close_notified"] = True
+            today_entry["close_notified_dir"] = direction_text
+            today_entry["close_notified_price"] = today_entry["close"]
+
+    # Failsafe: Close Correction Notification if direction changes after notification
+    elif today_entry.get("close_notified") and is_close_settled and today_entry.get("close") is not None:
+        curr_close_dir = "UP" if today_entry["close"] > today_entry["prior_close"] else "DOWN" if today_entry["close"] < today_entry["prior_close"] else "EQUAL"
+        if today_entry.get("close_notified_dir") and today_entry.get("close_notified_dir") != curr_close_dir:
+            close_diff = today_entry["close"] - today_entry["prior_close"]
+            sign = "+" if close_diff >= 0 else ""
+            dir_emoji = "🟢" if close_diff > 0 else "🔴" if close_diff < 0 else "⚪"
+            
+            msg = (
+                f"🚨 *KAPANIŞ DÜZELTME BİLDİRİMİ* 🔔\n\n"
+                f"S&P 500 Resmi Kapanış Fiyatı Açık Artırma Sonrası Kesinleşti!\n"
+                f"❌ *Önceki Erken Bildirim:* `{today_entry.get('close_notified_dir')}` (`{today_entry.get('close_notified_price', 0):,.2f}`)\n"
+                f"✅ *GERÇEK KESİNLEŞEN:* {dir_emoji} *{curr_close_dir}* (`{today_entry['close']:,.2f}` | Fark: `{sign}{close_diff:,.2f}`)\n"
+                f"📅 *Tarih:* `{today_str}`"
+            )
+            if send_telegram_message(msg):
+                today_entry["close_notified_dir"] = curr_close_dir
+                today_entry["close_notified_price"] = today_entry["close"]
             
     if len(history) > 30:
         history = history[:30]
@@ -681,8 +736,42 @@ def background_poller():
         time.sleep(1)
         fetch_wsj_data()
 
+def fix_and_notify_20260724():
+    history = data_cache.get("spx_history", [])
+    for entry in history:
+        if entry.get("date") == "2026-07-24":
+            if entry.get("close_notified_dir") != "UP" or entry.get("close") != 7411.98:
+                entry["prior_close"] = 7408.30
+                entry["open"] = 7406.30
+                entry["open_dir"] = "DOWN"
+                entry["open_pct"] = ((7406.30 - 7408.30) / 7408.30) * 100
+                entry["close"] = 7411.98
+                entry["close_dir"] = "UP"
+                entry["close_pct"] = ((7411.98 - 7408.30) / 7408.30) * 100
+                entry["open_notified"] = True
+                entry["open_notified_dir"] = "DOWN"
+                entry["open_notified_price"] = 7406.30
+                entry["close_notified"] = True
+                entry["close_notified_dir"] = "UP"
+                entry["close_notified_price"] = 7411.98
+                
+                save_spx_history(history)
+                msg = (
+                    f"🚨 *ACİL KAPANIŞ DÜZELTME BİLDİRİMİ (24 Temmuz 2026)* 🔔\n\n"
+                    f"Saat 23:00'te kapanış açık artırması tamamlanmadan gelen erken bildirim düzeltilmiştir:\n\n"
+                    f"❌ *Saat 23:00 Erken Bildirimi:* DOWN (-2.53 / 7,405.77)\n"
+                    f"✅ *GERÇEK KESİNLEŞEN KAPANIŞ:* 🟢 *UP Olarak Sonuçlandı!* (+3.68 / +0.05%)\n\n"
+                    f"💵 *Resmi Kapanış Fiyatı:* `7,411.98`\n"
+                    f"🔙 *Önceki Kapanış:* `7,408.30`\n"
+                    f"☀️ *Resmi Açılış Fiyatı:* `7,406.30` (🔴 DOWN)\n\n"
+                    f"⚠️ *Sistem Güncellemesi:* Erken bildirim hatasının bir daha yaşanmaması için Telegram kapanış bildirimi saat 23:04'e (açık artırma kesinleşmesine) çekilmiştir."
+                )
+                send_telegram_message(msg)
+                break
+
 # Initialize persistent SPX history
 data_cache["spx_history"] = load_or_init_spx_history()
+fix_and_notify_20260724()
 
 # Start background poller thread
 poller_thread = threading.Thread(target=background_poller, daemon=True)
