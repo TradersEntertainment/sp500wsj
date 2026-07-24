@@ -247,25 +247,25 @@ def update_today_in_history():
         open_dir = "UP" if open_price > prior_close else "DOWN" if open_price < prior_close else "EQUAL"
         open_pct = ((open_price - prior_close) / prior_close) * 100
         
-    # Open price is settled 3 minutes after 09:30 AM NY time (16:33 TR time)
-    is_open_settled = (now_ny.hour > 9) or (now_ny.hour == 9 and now_ny.minute >= 3)
+    # Open price is settled as soon as 09:30 candle open appears (16:30 TR time)
+    is_open_settled = (now_ny.hour > 9) or (now_ny.hour == 9 and now_ny.minute >= 0 and open_price is not None)
     
-    # Close price is settled 4 minutes after 16:00 PM NY time (23:04 TR time) after MOC closing auction completes
-    is_close_settled = (now_ny.hour > 16) or (now_ny.hour == 16 and now_ny.minute >= 4)
+    # Close price is settled as soon as 16:00 EDT (23:00 TR time) is reached
+    is_market_closed = (now_ny.hour >= 16) or (now_ny.hour == 15 and now_ny.minute >= 59 and now_ny.second >= 58)
     
     close_dir = "EQUAL"
     close_pct = 0.0
     close_price_to_save = None
     
-    if is_close_settled and last_price is not None:
-        close_price_to_save = last_price
-        close_dir = "UP" if close_price_to_save > prior_close else "DOWN" if close_price_to_save < prior_close else "EQUAL"
-        close_pct = ((close_price_to_save - prior_close) / prior_close) * 100
-    elif now_ny.hour >= 16 and last_price is not None:
-        # Temporary preview for website UI during MOC auction window (16:00 - 16:04 NY)
-        close_price_to_save = last_price
-        close_dir = "UP" if close_price_to_save > prior_close else "DOWN" if close_price_to_save < prior_close else "EQUAL"
-        close_pct = ((close_price_to_save - prior_close) / prior_close) * 100
+    if is_market_closed:
+        if yahoo_spx_meta.get("regularMarketPrice") is not None:
+            close_price_to_save = float(yahoo_spx_meta["regularMarketPrice"])
+        elif last_price is not None:
+            close_price_to_save = last_price
+            
+        if close_price_to_save is not None:
+            close_dir = "UP" if close_price_to_save > prior_close else "DOWN" if close_price_to_save < prior_close else "EQUAL"
+            close_pct = ((close_price_to_save - prior_close) / prior_close) * 100
         
     if today_entry is None:
         today_entry = {
@@ -297,7 +297,7 @@ def update_today_in_history():
         today_entry["close_dir"] = close_dir
         today_entry["close_pct"] = float(close_pct)
 
-    # Check and trigger Telegram Open Notification ONLY AFTER settlement window (09:33 NY / 16:33 TR)
+    # Check and trigger Telegram Open Notification INSTANTLY (Sub-5 seconds of 16:30 TR time)
     if today_entry.get("open") is not None and is_open_settled and not today_entry.get("open_notified", False):
         open_diff = today_entry["open"] - today_entry["prior_close"]
         sign = "+" if open_diff >= 0 else ""
@@ -308,7 +308,7 @@ def update_today_in_history():
             f"{direction_emoji} *{direction_text} Olarak Açıldı!* (Fark: `{sign}{open_diff:,.2f}` / `{sign}{today_entry['open_pct']:.2f}%`)\n\n"
             f"🔔 *S&P 500 (SPX) Açılış Detayları:*\n"
             f"📅 *Tarih:* `{today_str}`\n"
-            f"💵 *Kesinleşen Açılış Fiyatı:* `{today_entry['open']:,.2f}`\n"
+            f"💵 *Açılış Fiyatı:* `{today_entry['open']:,.2f}`\n"
             f"🔙 *Dünkü Kapanış:* `{today_entry['prior_close']:,.2f}`"
         )
         if send_telegram_message(msg):
@@ -326,7 +326,7 @@ def update_today_in_history():
             
             msg = (
                 f"⚠️ *AÇILIŞ DÜZELTME BİLDİRİMİ* 🔔\n\n"
-                f"S&P 500 Resmi Açılış Fiyatı Kesinleşti!\n"
+                f"S&P 500 Resmi Açılış Fiyatı Güncellendi!\n"
                 f"❌ *Önceki Erken Bildirim:* `{today_entry.get('open_notified_dir')}` ({today_entry.get('open_notified_price', 0):,.2f})\n"
                 f"✅ *GERÇEK KESİNLEŞEN:* {dir_emoji} *{curr_open_dir}* (`{today_entry['open']:,.2f}` | Fark: `{sign}{open_diff:,.2f}`)\n"
                 f"📅 *Tarih:* `{today_str}`"
@@ -335,8 +335,8 @@ def update_today_in_history():
                 today_entry["open_notified_dir"] = curr_open_dir
                 today_entry["open_notified_price"] = today_entry["open"]
 
-    # Check and trigger Telegram Close Notification ONLY AFTER MOC Closing Auction settles (16:04 NY / 23:04 TR)
-    if today_entry.get("close") is not None and is_close_settled and not today_entry.get("close_notified", False):
+    # Check and trigger Telegram Close Notification INSTANTLY (Sub-5 seconds of 23:00 TR time)
+    if today_entry.get("close") is not None and is_market_closed and not today_entry.get("close_notified", False):
         close_diff = today_entry["close"] - today_entry["prior_close"]
         sign = "+" if close_diff >= 0 else ""
         direction_emoji = "🟢" if close_diff > 0 else "🔴" if close_diff < 0 else "⚪"
@@ -346,7 +346,7 @@ def update_today_in_history():
             f"{direction_emoji} *{direction_text} Olarak Sonuçlandı!* (Fark: `{sign}{close_diff:,.2f}` / `{sign}{today_entry['close_pct']:.2f}%`)\n\n"
             f"🔔 *S&P 500 (SPX) Kapanış Detayları:*\n"
             f"📅 *Tarih:* `{today_str}`\n"
-            f"💵 *Kesinleşen Kapanış Fiyatı:* `{today_entry['close']:,.2f}`\n"
+            f"💵 *Resmi Kapanış Fiyatı:* `{today_entry['close']:,.2f}`\n"
             f"🔙 *Önceki Kapanış:* `{today_entry['prior_close']:,.2f}`"
         )
         if send_telegram_message(msg):
@@ -468,35 +468,20 @@ TICKERS = {
     "SPY": {"symbol": "FUND/US//SPY", "name": "S&P 500 ETF"}
 }
 
-# Cache for daily data (open prices and 5m history) to avoid spamming Yahoo Finance
-cached_daily_data = {"open_prices": {}, "history": {"SPX": [], "ES00": [], "SPY": []}}
-last_daily_fetch_time = 0
-
-# Track access blocks / bans (403, 429 status codes)
-consecutive_failures = {
-    "WSJ": 0,
-    "Yahoo": 0
-}
-ban_alert_sent = {
-    "WSJ": False,
-    "Yahoo": False
-}
+yahoo_spx_meta = {}
 
 def get_daily_data():
-    """Fetches official today's open price and 5m intraday history from Yahoo Finance."""
-    global cached_daily_data, last_daily_fetch_time
+    """Fetches official today's open price, live regular market close, and intraday history from Yahoo Finance."""
+    global cached_daily_data, last_daily_fetch_time, yahoo_spx_meta
     now = time.time()
     
-    # Determine the cache duration:
-    # During market open (9:29 AM - 9:35 AM NY time) and market close (3:59 PM - 4:05 PM NY time),
-    # refresh every 2 seconds to get the official open/close prices immediately.
-    # Otherwise, refresh every 5 minutes (300 seconds) to avoid spamming Yahoo Finance.
+    # Fast sub-second polling during open/close windows (16:29 - 16:32 TR and 22:59 - 23:02 TR)
     ny_tz = ZoneInfo("America/New_York")
     now_ny = datetime.now(ny_tz)
-    is_market_open_window = (now_ny.hour == 9 and 29 <= now_ny.minute <= 35)
-    is_market_close_window = (now_ny.hour == 15 and now_ny.minute >= 59) or (now_ny.hour == 16 and now_ny.minute <= 5)
+    is_market_open_window = (now_ny.hour == 9 and 29 <= now_ny.minute <= 32)
+    is_market_close_window = (now_ny.hour == 15 and now_ny.minute >= 59) or (now_ny.hour == 16 and now_ny.minute <= 2)
     
-    cache_duration = 1 if (is_market_open_window or is_market_close_window) else 300
+    cache_duration = 0.5 if (is_market_open_window or is_market_close_window) else 300
     
     # Return cached data if fetched less than cache_duration ago
     if cached_daily_data["open_prices"] and (now - last_daily_fetch_time < cache_duration):
@@ -514,7 +499,7 @@ def get_daily_data():
             history[ticker] = cached_daily_data["history"][ticker]
             
         try:
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=5m&range=1d"
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1m&range=1d"
             response = requests.get(url, headers=HEADERS, timeout=4)
             if response.status_code == 200:
                 consecutive_failures["Yahoo"] = 0
@@ -524,6 +509,12 @@ def get_daily_data():
                 
                 data = response.json()
                 result = data["chart"]["result"][0]
+                meta = result.get("meta", {})
+                
+                if ticker == "SPX":
+                    yahoo_spx_meta["regularMarketPrice"] = meta.get("regularMarketPrice")
+                    yahoo_spx_meta["chartPreviousClose"] = meta.get("chartPreviousClose")
+                    yahoo_spx_meta["regularMarketTime"] = meta.get("regularMarketTime")
                 
                 ny_date = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
                 timestamp_list = result.get("timestamp", [])
