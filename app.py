@@ -343,16 +343,59 @@ def update_today_in_history():
         direction_text = "UP" if close_diff > 0 else "DOWN" if close_diff < 0 else "EQUAL"
         
         msg = (
+            f"⚡ *ANLIK KAPANIŞ BİLDİRİMİ* 🔔\n\n"
             f"{direction_emoji} *{direction_text} Olarak Sonuçlandı!* (Fark: `{sign}{close_diff:,.2f}` / `{sign}{today_entry['close_pct']:.2f}%`)\n\n"
-            f"🔔 *S&P 500 (SPX) Kapanış Detayları:*\n"
             f"📅 *Tarih:* `{today_str}`\n"
-            f"💵 *Resmi Kapanış Fiyatı:* `{today_entry['close']:,.2f}`\n"
-            f"🔙 *Önceki Kapanış:* `{today_entry['prior_close']:,.2f}`"
+            f"💵 *Anlık Kapanış Fiyatı:* `{today_entry['close']:,.2f}`\n"
+            f"🔙 *Önceki Kapanış:* `{today_entry['prior_close']:,.2f}`\n\n"
+            f"⏳ _WSJ resmi onay bildirimi 2-3 dakika içinde takip edecektir._"
         )
         if send_telegram_message(msg):
             today_entry["close_notified"] = True
             today_entry["close_notified_dir"] = direction_text
             today_entry["close_notified_price"] = today_entry["close"]
+
+    # Layer 2: WSJ Official Close Confirmation Notification (around 23:03 TR time)
+    if is_market_closed and (now_ny.minute >= 3 or now_ny.hour > 16) and not today_entry.get("wsj_close_confirmed", False):
+        wsj_close = spx_quote.get("lastPrice")
+        if wsj_close is not None:
+            close_diff = wsj_close - today_entry["prior_close"]
+            sign = "+" if close_diff >= 0 else ""
+            direction_emoji = "🟢" if close_diff > 0 else "🔴" if close_diff < 0 else "⚪"
+            direction_text = "UP" if close_diff > 0 else "DOWN" if close_diff < 0 else "EQUAL"
+            close_pct = (close_diff / today_entry["prior_close"]) * 100
+            
+            msg = (
+                f"📰 *WSJ RESMİ KAPANIŞ ONAY BİLDİRİMİ* 🔔\n\n"
+                f"{direction_emoji} *{direction_text} Olarak Wall Street Journal (WSJ) Tarafından Kesinleşti!*\n\n"
+                f"📅 *Tarih:* `{today_str}`\n"
+                f"💵 *WSJ Resmi Kapanış Fiyatı:* `{wsj_close:,.2f}`\n"
+                f"📊 *Net Değişim:* `{sign}{close_diff:,.2f} ({sign}{close_pct:.2f}%)`\n"
+                f"🔙 *Önceki Kapanış:* `{today_entry['prior_close']:,.2f}`\n\n"
+                f"✅ *Polymarket Sonuç Onayı:* *{direction_text} {direction_emoji}*"
+            )
+            if send_telegram_message(msg):
+                today_entry["wsj_close_confirmed"] = True
+
+    # Layer 2: WSJ Official Open Confirmation Notification (around 16:33 TR time)
+    if is_open_settled and (now_ny.minute >= 3 or now_ny.hour > 9) and not today_entry.get("wsj_open_confirmed", False):
+        if today_entry.get("open") is not None:
+            open_diff = today_entry["open"] - today_entry["prior_close"]
+            sign = "+" if open_diff >= 0 else ""
+            direction_emoji = "🟢" if open_diff > 0 else "🔴" if open_diff < 0 else "⚪"
+            direction_text = "UP" if open_diff > 0 else "DOWN" if open_diff < 0 else "EQUAL"
+            
+            msg = (
+                f"📰 *WSJ RESMİ AÇILIŞ ONAY BİLDİRİMİ* 🔔\n\n"
+                f"{direction_emoji} *{direction_text} Olarak Wall Street Journal (WSJ) Tarafından Kesinleşti!*\n\n"
+                f"📅 *Tarih:* `{today_str}`\n"
+                f"💵 *WSJ Resmi Açılış Fiyatı:* `{today_entry['open']:,.2f}`\n"
+                f"📊 *Net Değişim:* `{sign}{open_diff:,.2f} ({sign}{today_entry['open_pct']:.2f}%)`\n"
+                f"🔙 *Dünkü Kapanış:* `{today_entry['prior_close']:,.2f}`\n\n"
+                f"✅ *Polymarket Açılış Yönü:* *{direction_text} {direction_emoji}*"
+            )
+            if send_telegram_message(msg):
+                today_entry["wsj_open_confirmed"] = True
 
     # Failsafe: Close Correction Notification if direction changes after notification
     elif today_entry.get("close_notified") and is_close_settled and today_entry.get("close") is not None:
