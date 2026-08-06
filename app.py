@@ -511,6 +511,20 @@ TICKERS = {
     "SPY": {"symbol": "FUND/US//SPY", "name": "S&P 500 ETF"}
 }
 
+# Cache for daily data (open prices and 1m history) to avoid spamming Yahoo Finance
+cached_daily_data = {"open_prices": {}, "history": {"SPX": [], "ES00": [], "SPY": []}}
+last_daily_fetch_time = 0
+
+# Track access blocks / bans (403, 429 status codes)
+consecutive_failures = {
+    "WSJ": 0,
+    "Yahoo": 0
+}
+ban_alert_sent = {
+    "WSJ": False,
+    "Yahoo": False
+}
+
 yahoo_spx_meta = {}
 
 def get_daily_data():
